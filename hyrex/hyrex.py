@@ -1,7 +1,6 @@
 import numpy as np
 import jax.numpy as jnp
-from jax import jit, config, lax, grad
-from jax import debug
+from jax import jit, config
 import equinox as eqx
 from diffrax import Kvaerno3
 

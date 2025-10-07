@@ -1,6 +1,5 @@
 import jax.numpy as jnp
-from jax import jit, config, lax, grad
-from jax import debug
+from jax import lax
 import equinox as eqx
 
 

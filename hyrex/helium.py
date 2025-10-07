@@ -1,7 +1,5 @@
 import jax.numpy as jnp
 from jax import jit, config, lax, grad
-from jax import debug
-from jax.scipy.ndimage import map_coordinates
 import equinox as eqx
 
 from diffrax import diffeqsolve, SaveAt, ODETerm, Kvaerno3, PIDController, DiscreteTerminatingEvent, ForwardMode

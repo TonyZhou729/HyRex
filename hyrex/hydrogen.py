@@ -1,7 +1,7 @@
 import numpy as np
 
 import jax.numpy as jnp
-from jax import jit, config, lax, grad
+from jax import config, lax, grad
 import equinox as eqx
 
 from diffrax import diffeqsolve, SaveAt, ODETerm, Tsit5, Kvaerno3, PIDController, DiscreteTerminatingEvent, ForwardMode
