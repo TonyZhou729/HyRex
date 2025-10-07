@@ -1,5 +1,6 @@
 import numpy as np
 import jax.numpy as jnp
+from jax import config
 from jax.scipy.ndimage import map_coordinates
 from .cosmology import  me, mu_e, c, hbar, kB
 from . import cosmology
