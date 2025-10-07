@@ -9,8 +9,11 @@
 import os
 import sys
 
+
 # -- Path setup --------------------------------------------------------------
 sys.path.insert(0, os.path.abspath('..'))
+import hyrex as _h
+sys.modules['HyRex'] = _h
 
 project = 'HyRex'
 copyright = '2025, Zilu Zhou, Cara Giovanetti, and Hongwan Liu'
