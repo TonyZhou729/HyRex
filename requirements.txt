@@ -1,0 +1,7 @@
+numpy
+scipy
+matplotlib
+jax
+jaxlib
+diffrax
+equinox
