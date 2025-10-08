@@ -134,7 +134,7 @@ class helium_model(eqx.Module):
         # Compute xe at different phases
 
         # Give it a large enough array of lna to work with
-        xe_output_4He_equil, lna_output_4He_equil = self.xesaha_HeII_III(self.lna_axis_4Heequil, h, omega_b, omega_cdm, Neff, YHe)
+        xe_output_4He_equil, lna_output_4He_equil = self.xesaha_HeII_III(self.lna_axis_4Heequil,omega_b, YHe)
         
         xe_output_4He_equil_obj = array_with_padding(xe_output_4He_equil)
         lna_output_4He_equil_obj = array_with_padding(lna_output_4He_equil)
@@ -162,7 +162,7 @@ class helium_model(eqx.Module):
 
     # High tempateratures (z >~ 4000).  Function to calculate xe in He II + III equilibrium
     # We use this form until xHeIII is 1e-9
-    def xesaha_HeII_III(self, lna_axis, h, omega_b, omega_cdm, Neff, YHe, threshold=1e-9):
+    def xesaha_HeII_III(self, lna_axis, omega_b, YHe, threshold=1e-9):
         """
         Compute xe in HeII+III equilibrium phase.
 
@@ -173,14 +173,8 @@ class helium_model(eqx.Module):
         -----------
         lna_axis : array
             Log scale factor grid
-        h : float
-            Hubble parameter
         omega_b : float
             The baryon density Omega_b h^2
-        omega_cdm : float
-            The density of Cold Dark Matter Omega_cdm h^2
-        Neff : float
-            Effective number of neutrinos
         YHe : float
             Helium fraction
         threshold : float, optional
@@ -244,7 +238,7 @@ class helium_model(eqx.Module):
         return xe_output_final, lna_output_final
 
 
-    def xHeII_post_Saha(self, lna, h, omega_b, omega_cdm, Neff, YHe):
+    def xHeII_post_Saha(self, lna, omega_b, YHe):
         """
         Compute HeII fraction in post-Saha regime.
 
@@ -282,7 +276,7 @@ class helium_model(eqx.Module):
 
         return xHeII
 
-    def xH1_Saha(self, lna, h, omega_b, omega_cdm, Neff, YHe):
+    def xH1_Saha(self, lna, omega_b, YHe):
         """
         Compute neutral hydrogen fraction in Saha equilibrium.
 
@@ -293,14 +287,8 @@ class helium_model(eqx.Module):
         -----------
         lna : float
             Log scale factor
-        h : float
-            Hubble parameter
         omega_b : float
             The baryon density Omega_b h^2
-        omega_cdm : float
-            The density of Cold Dark Matter Omega_cdm h^2
-        Neff : float
-            Effective number of neutrinos
         YHe : float
             Helium fraction
 
@@ -312,7 +300,7 @@ class helium_model(eqx.Module):
         z = jnp.exp(-lna) - 1.
         TCMB = cosmology.TCMB(z)
         nH = cosmology.nH(z, omega_b, YHe)
-        xHeII = self.xHeII_post_Saha(lna, h, omega_b, omega_cdm, Neff, YHe)
+        xHeII = self.xHeII_post_Saha(lna, omega_b, YHe)
         s = 2.4127161187130e15* TCMB/cosmology.kB * jnp.sqrt(TCMB/cosmology.kB)*jnp.exp(-157801.37882/(TCMB/cosmology.kB))/nH
         xH1 = jnp.where(s>1e5,(1.+xHeII)/s - (xHeII**2 + 3.*xHeII + 2.)/s**2,\
             jnp.where(s==0,1,1.-2./(1.+ xHeII/s + jnp.sqrt((1.+ xHeII/s)*(1.+ xHeII/s) +4./s))))
@@ -361,14 +349,14 @@ class helium_model(eqx.Module):
 
             lna = starting_lna + iz*self.integration_spacing
             
-            xHeII = self.xHeII_post_Saha(lna, h, omega_b, omega_cdm, Neff, YHe)
-            xH1 = self.xH1_Saha(lna, h, omega_b, omega_cdm, Neff, YHe)
+            xHeII = self.xHeII_post_Saha(lna, omega_b, YHe)
+            xH1 = self.xH1_Saha(lna, omega_b, YHe)
             xe_saha = 1 - xH1 + xHeII
             
             # Do post saha expansion.  Assume all hydrogen is ionized.
             grad_dxedlna_func = grad(self.helium_dxHeIIdlna, argnums=0) 
             grad_dxedlna = grad_dxedlna_func(xe_saha, lna, h, omega_b, omega_cdm, Neff, YHe)
-            dxe_Saha_dlna = grad(self.xHeII_post_Saha,argnums=0)(lna, h, omega_b, omega_cdm, Neff, YHe)
+            dxe_Saha_dlna = grad(self.xHeII_post_Saha,argnums=0)(lna, omega_b, YHe)
             xe = xe_saha + dxe_Saha_dlna / grad_dxedlna
 
             # Store current xe value in the output array
@@ -441,7 +429,7 @@ class helium_model(eqx.Module):
         GammaC = recomb_functions.Gamma_compton(xe, TCMB, YHe)  # Compton scattering rate, 1/s
 
         # compute xH1 in Saha equilibrium, xHeII in post-saha
-        xH1 = self.xH1_Saha(lna, h, omega_b, omega_cdm, Neff, YHe)
+        xH1 = self.xH1_Saha(lna, omega_b, YHe)
         # use xe  = xHeII + (1.-xH1)
         xHeII = xe - (1.-xH1)
 
@@ -506,7 +494,7 @@ class helium_model(eqx.Module):
         h, omega_b, omega_cdm, Neff, YHe = args
         #z = 1. / jnp.exp(lna) - 1.
         # use xe  = xHeII + (1.-xH1)
-        xe = state + self.xH1_Saha(lna, h, omega_b, omega_cdm, Neff, YHe)
+        xe = state + self.xH1_Saha(lna, omega_b, YHe)
 
         return self.helium_dxHeIIdlna(xe, lna, h, omega_b, omega_cdm, Neff, YHe)
 
@@ -564,7 +552,7 @@ class helium_model(eqx.Module):
 
         def He_check(state, **kwargs):
             lna = state.tprev
-            xH1 = self.xH1_Saha(lna, h, omega_b, omega_cdm, Neff, YHe)
+            xH1 = self.xH1_Saha(lna, omega_b, YHe)
 
             # use xe  = xHeII + (1.-xH1)
             xHeII = state.y[0] - (1.-xH1)
