@@ -84,13 +84,21 @@ class hydrogen_model(eqx.Module):
         self.twog_redshift = 701.
 
     def __call__(self, h, omega_b, omega_cdm, Neff, YHe, rtol=1e-6, atol=1e-9,solver=Kvaerno3(),max_steps=1024):
-        # CG: update docs
         """
         Compute hydrogen recombination history.
 
         Parameters:
         -----------
-    
+        h : float
+            Hubble parameter
+        omega_b : float
+            The baryon density Omega_b h^2
+        omega_cdm : float
+            The density of Cold Dark Matter Omega_cdm h^2
+        Neff : float
+            Effective number of neutrinos
+        YHe : float
+            Helium fraction
         rtol : float, optional
             Relative tolerance for ODE solver (default: 1e-6)
         atol : float, optional
@@ -109,7 +117,6 @@ class hydrogen_model(eqx.Module):
         return self.get_hydrogen_history(h, omega_b, omega_cdm, Neff, YHe, rtol, atol, solver, max_steps)
     
     def get_hydrogen_history(self, h, omega_b, omega_cdm, Neff, YHe, rtol=1e-6, atol=1e-9,solver=Kvaerno3(),max_steps=1024):
-        # CG: update docs
         """
         Compute complete hydrogen recombination history through all phases.
 
@@ -119,6 +126,16 @@ class hydrogen_model(eqx.Module):
 
         Parameters:
         -----------
+        h : float
+            Hubble parameter
+        omega_b : float
+            The baryon density Omega_b h^2
+        omega_cdm : float
+            The density of Cold Dark Matter Omega_cdm h^2
+        Neff : float
+            Effective number of neutrinos
+        YHe : float
+            Helium fraction
         rtol : float, optional
             Relative tolerance for ODE solver (default: 1e-6)
         atol : float, optional
@@ -150,7 +167,7 @@ class hydrogen_model(eqx.Module):
         ### HYREC2 EMLA + FULL TWO PHOTON PHASE ###
 
         xe_output_2g, lna_output_2g = self.solve_emla_twophoton(lna_4He_and_post.lastval, -jnp.log(self.twog_redshift), xe_4He_and_post.lastval, h, omega_b, omega_cdm, Neff, YHe, rtol, atol, solver, max_steps)
-        
+
         xe_4He_post_2g = xe_4He_and_post.concat(array_with_padding(xe_output_2g))
         lna_4He_post_2g = lna_4He_and_post.concat(array_with_padding(lna_output_2g))
         ### END HYREC2 EMLA + FULL TWO PHOTON PHASE ###
@@ -158,7 +175,7 @@ class hydrogen_model(eqx.Module):
         ### HYREC2 EMLA ONLY PHASE ###
 
         xe_output_late, Tm_output_late = self.solve_emla(self.lna_axis_late , xe_4He_post_2g.lastval, h, omega_b, omega_cdm, Neff, YHe, rtol, atol, solver, max_steps)
-      
+
         lna_Tm = array_with_padding(self.lna_axis_late)
         Tm = array_with_padding(Tm_output_late)
 
@@ -181,8 +198,16 @@ class hydrogen_model(eqx.Module):
         -----------
         starting_lna : float
             Initial log scale factor
-        BG : cosmology.Background
-            Background cosmology module
+        h : float
+            Hubble parameter
+        omega_b : float
+            The baryon density Omega_b h^2
+        omega_cdm : float
+            The density of Cold Dark Matter Omega_cdm h^2
+        Neff : float
+            Effective number of neutrinos
+        YHe : float
+            Helium fraction
         threshold : float, optional
             Threshold for deviation from Saha (default: 1e-5)
 
@@ -257,7 +282,6 @@ class hydrogen_model(eqx.Module):
         return xe_output_final, lna_output_final
     
     def xe_derivative_twophoton(self, lna, xe, args):
-        #CG: docs
         """
         Compute ionization fraction derivative including two-photon processes.
 
@@ -270,8 +294,12 @@ class hydrogen_model(eqx.Module):
             Log scale factor
         xe : float
             Current ionization fraction
-        args : cosmology.Background
-            Background cosmology module
+        args : tuple
+            h, omega_b, omega_cdm, Neff, YHe, omega_rad; the Hubble parameter,
+            the baryon denisty Omega_b h^2, the CDM density Omega_cdm h^2, 
+            the effecgive number of neutrinos, the helium fraction, and 
+            the radiation energy density (determined by Neff and can be 
+            computed by cosmology.omega_rad0(Neff))
 
         Returns:
         --------
@@ -295,8 +323,8 @@ class hydrogen_model(eqx.Module):
         return dxedlna
 
 
-    def solve_emla_twophoton(self, lna_axis_init, lna_axis_final, xe0, h, omega_b, omega_cdm, Neff, YHe, rtol=1e-6, atol=1e-9,solver=Kvaerno3(),max_steps=1024):
-        # CG: docs
+    def solve_emla_twophoton(self, lna_axis_init, lna_axis_final, xe0, h, omega_b, omega_cdm, Neff, YHe, rtol=1e-6, atol=1e-9,solver=Kvaerno3(),max_steps=4096):
+        #CG docs
         """
         Solve HYREC-2 EMLA evolution with two-photon processes.
 
@@ -311,7 +339,16 @@ class hydrogen_model(eqx.Module):
             Final log scale factor
         xe0 : float
             Initial ionization fraction
-        args
+        h : float
+            Hubble parameter
+        omega_b : float
+            The baryon density Omega_b h^2
+        omega_cdm : float
+            The density of Cold Dark Matter Omega_cdm h^2
+        Neff : float
+            Effective number of neutrinos
+        YHe : float
+            Helium fraction
         rtol : float, optional
             Relative tolerance (default: 1e-6)
         atol : float, optional
@@ -345,6 +382,7 @@ class hydrogen_model(eqx.Module):
             lna = state.tprev
             return lna > lna_axis_final
         
+        # use diffrax default max_steps of 4096
         sol = diffeqsolve(
             term, solver, t0=t0, t1=t1, dt0=1e-3, 
             y0=initial_state, 
@@ -361,7 +399,6 @@ class hydrogen_model(eqx.Module):
 
 
     def xe_tm_derivative(self, lna, state, args):
-        # CG: docs
         """
         Compute coupled derivatives for ionization fraction and matter temperature.
 
@@ -374,8 +411,12 @@ class hydrogen_model(eqx.Module):
             Log scale factor
         state : array
             Current state [xe, Tm]
-        args : cosmology.Background
-            Background cosmology module
+        args : tuple
+            h, omega_b, omega_cdm, Neff, YHe, omega_rad; the Hubble parameter,
+            the baryon denisty Omega_b h^2, the CDM density Omega_cdm h^2, 
+            the effecgive number of neutrinos, the helium fraction, and 
+            the radiation energy density (determined by Neff and can be 
+            computed by cosmology.omega_rad0(Neff))
 
         Returns:
         --------
@@ -398,7 +439,6 @@ class hydrogen_model(eqx.Module):
         return jnp.array([dxedlna, dTmdlna])
 
     def solve_emla(self, lna_axis, xe0, h, omega_b, omega_cdm, Neff, YHe,rtol=1e-7, atol=1e-9,solver=Tsit5(),max_steps=4096):
-        # CG: doc
         """
         Solve late-time EMLA evolution without two-photon processes.
 
@@ -411,8 +451,16 @@ class hydrogen_model(eqx.Module):
             Log scale factor grid
         xe0 : float
             Initial ionization fraction
-        BG : cosmology.Background
-            Background cosmology module
+        h : float
+            Hubble parameter
+        omega_b : float
+            The baryon density Omega_b h^2
+        omega_cdm : float
+            The density of Cold Dark Matter Omega_cdm h^2
+        Neff : float
+            Effective number of neutrinos
+        YHe : float
+            Helium fraction
         rtol : float, optional
             Relative tolerance (default: 1e-7)
         atol : float, optional
@@ -505,8 +553,16 @@ class hydrogen_model(eqx.Module):
         -----------
         TCMB : float
             CMB temperature (units: eV)
-        BG : cosmology.Background
-            Background cosmology module
+        h : float
+            Hubble parameter
+        omega_b : float
+            The baryon density Omega_b h^2
+        omega_cdm : float
+            The density of Cold Dark Matter Omega_cdm h^2
+        Neff : float
+            Effective number of neutrinos
+        YHe : float
+            Helium fraction
 
         Returns:
         --------
