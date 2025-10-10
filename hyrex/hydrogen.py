@@ -174,7 +174,7 @@ class hydrogen_model(eqx.Module):
 
         ### HYREC2 EMLA ONLY PHASE ###
 
-        xe_output_late, Tm_output_late = self.solve_emla(self.lna_axis_late , xe_4He_post_2g.lastval, h, omega_b, omega_cdm, Neff, YHe, rtol, atol, solver, max_steps)
+        xe_output_late, Tm_output_late = self.solve_emla(self.lna_axis_late , xe_4He_post_2g.lastval, h, omega_b, omega_cdm, Neff, YHe, rtol, atol, solver)
 
         lna_Tm = array_with_padding(self.lna_axis_late)
         Tm = array_with_padding(Tm_output_late)
@@ -324,7 +324,6 @@ class hydrogen_model(eqx.Module):
 
 
     def solve_emla_twophoton(self, lna_axis_init, lna_axis_final, xe0, h, omega_b, omega_cdm, Neff, YHe, rtol=1e-6, atol=1e-9,solver=Kvaerno3(),max_steps=4096):
-        #CG docs
         """
         Solve HYREC-2 EMLA evolution with two-photon processes.
 
@@ -475,10 +474,10 @@ class hydrogen_model(eqx.Module):
         tuple
             (xe_output, Tm_output) - ionization fraction and matter temperature arrays
         """
-        t0 = lna_axis.min()
+        t0 = lna_axis.min()-self.integration_spacing
         t1 = lna_axis.max()
         save_at = SaveAt(ts=lna_axis)
-        TCMB_init = cosmology.TCMB(jnp.exp(-lna_axis.min()) - 1.)  # Initial matter temperature
+        TCMB_init = cosmology.TCMB(jnp.exp(-t0) - 1.) 
 
         #H is function of z
         Tm0 = TCMB_init * (1.-cosmology.Hubble(1/jnp.exp(t0) - 1, h, omega_b, omega_cdm, cosmology.omega_rad0(Neff))/recomb_functions.Gamma_compton(xe0, TCMB_init, YHe))
@@ -492,7 +491,8 @@ class hydrogen_model(eqx.Module):
             y0=initial_state, 
             args=(h, omega_b, omega_cdm, Neff, YHe, cosmology.omega_rad0(Neff)),
             stepsize_controller=PIDController(rtol, atol),saveat=save_at,
-            adjoint=adjoint
+            adjoint=adjoint,
+            max_steps=max_steps
         )
         
         xe_output = sol.ys[:, 0] 
