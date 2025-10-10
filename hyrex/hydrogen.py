@@ -48,7 +48,7 @@ class hydrogen_model(eqx.Module):
     last_4He_lna : jnp.float64
     twog_redshift : jnp.float64
 
-    def __init__(self,xe_4He,lna_4He,lna_axis_late,last_4He_lna,integration_spacing = 5.0e-4, Nsteps=800,swift = jnp.array(np.loadtxt(file_dir+"/tabs/fit_swift.dat"))):
+    def __init__(self,xe_4He,lna_4He,lna_axis_late,last_4He_lna,twog_redshift,integration_spacing = 5.0e-4, Nsteps=800,swift = jnp.array(np.loadtxt(file_dir+"/tabs/fit_swift.dat"))):
         """
         Initialize hydrogen recombination model.
 
@@ -81,7 +81,7 @@ class hydrogen_model(eqx.Module):
         self.lna_4He = lna_4He
 
         self.last_4He_lna = last_4He_lna
-        self.twog_redshift = 701.
+        self.twog_redshift = twog_redshift
 
     def __call__(self, h, omega_b, omega_cdm, Neff, YHe, rtol=1e-6, atol=1e-9,solver=Kvaerno3(),max_steps=1024):
         """
