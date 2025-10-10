@@ -66,12 +66,21 @@ class recomb_model(eqx.Module):
 
     @jit
     def __call__(self, h, omega_b, omega_cdm, Neff, YHe, z_reion = 11, Delta_z_reion = 0.5, rtol=1e-6, atol=1e-9,solver=Kvaerno3(),max_steps=1024):
-        # CG: fix docs
         """
         Compute complete recombination and reionization history.
 
         Parameters:
         -----------
+        h : float
+            Hubble parameter
+        omega_b : float
+            The baryon density Omega_b h^2
+        omega_cdm : float
+            The density of Cold Dark Matter Omega_cdm h^2
+        Neff : float
+            Effective number of neutrinos
+        YHe : float
+            Helium fraction
         z_reion : float, optional
             Reionization redshift (default: 11)
         Delta_z_reion : float, optional
@@ -100,6 +109,16 @@ class recomb_model(eqx.Module):
 
         Parameters:
         -----------
+        h : float
+            Hubble parameter
+        omega_b : float
+            The baryon density Omega_b h^2
+        omega_cdm : float
+            The density of Cold Dark Matter Omega_cdm h^2
+        Neff : float
+            Effective number of neutrinos
+        YHe : float
+            Helium fraction
         z_reion : float, optional
             Reionization redshift (default: 11)
         Delta_z_reion : float, optional
