@@ -166,7 +166,9 @@ class hydrogen_model(eqx.Module):
 
         ### HYREC2 EMLA + FULL TWO PHOTON PHASE ###
 
-        xe_output_2g, lna_output_2g = self.solve_emla_twophoton(lna_4He_and_post.lastval, -jnp.log(self.twog_redshift), xe_4He_and_post.lastval, h, omega_b, omega_cdm, Neff, YHe, rtol, atol, solver, max_steps)
+        xe_output_2g, lna_output_2g = self.solve_emla_twophoton(lna_4He_and_post.lastval, -jnp.log(self.twog_redshift), 
+                                                                xe_4He_and_post.lastval, h, omega_b, omega_cdm, Neff, YHe, 
+                                                                rtol, atol, solver, max_steps)
 
         xe_4He_post_2g = xe_4He_and_post.concat(array_with_padding(xe_output_2g))
         lna_4He_post_2g = lna_4He_and_post.concat(array_with_padding(lna_output_2g))
@@ -174,7 +176,7 @@ class hydrogen_model(eqx.Module):
 
         ### HYREC2 EMLA ONLY PHASE ###
 
-        xe_output_late, Tm_output_late = self.solve_emla(self.lna_axis_late , xe_4He_post_2g.lastval, h, omega_b, omega_cdm, Neff, YHe, rtol, atol, solver)
+        xe_output_late, Tm_output_late = self.solve_emla(self.lna_axis_late, xe_4He_post_2g.lastval, h, omega_b, omega_cdm, Neff, YHe, rtol, atol, solver)
 
         lna_Tm = array_with_padding(self.lna_axis_late)
         Tm = array_with_padding(Tm_output_late)
@@ -477,12 +479,11 @@ class hydrogen_model(eqx.Module):
 
         omega_rad = cosmology.omega_rad0(Neff)
 
-        t0 = lna_axis.min()-self.integration_spacing # need to back up a step since that's where we have xe0
+        t0 = lna_axis.min()-self.integration_spacing # need to back up a step since that's where we specified xe0
         t1 = lna_axis.max()
         save_at = SaveAt(ts=lna_axis) # but start saving output at step 1 or later
         TCMB_init = cosmology.TCMB(jnp.exp(-t0) - 1.) 
 
-        #H is function of z
         Tm0 = TCMB_init * (1.-cosmology.Hubble(1/jnp.exp(t0) - 1, h, omega_b, omega_cdm, omega_rad)/recomb_functions.Gamma_compton(xe0, TCMB_init, YHe))
 
         initial_state = jnp.array([xe0, Tm0])
