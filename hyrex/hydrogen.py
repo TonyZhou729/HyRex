@@ -474,13 +474,16 @@ class hydrogen_model(eqx.Module):
         tuple
             (xe_output, Tm_output) - ionization fraction and matter temperature arrays
         """
-        t0 = lna_axis.min()-self.integration_spacing
+
+        omega_rad = cosmology.omega_rad0(Neff)
+
+        t0 = lna_axis.min()-self.integration_spacing # need to back up a step since that's where we have xe0
         t1 = lna_axis.max()
-        save_at = SaveAt(ts=lna_axis)
+        save_at = SaveAt(ts=lna_axis) # but start saving output at step 1 or later
         TCMB_init = cosmology.TCMB(jnp.exp(-t0) - 1.) 
 
         #H is function of z
-        Tm0 = TCMB_init * (1.-cosmology.Hubble(1/jnp.exp(t0) - 1, h, omega_b, omega_cdm, cosmology.omega_rad0(Neff))/recomb_functions.Gamma_compton(xe0, TCMB_init, YHe))
+        Tm0 = TCMB_init * (1.-cosmology.Hubble(1/jnp.exp(t0) - 1, h, omega_b, omega_cdm, omega_rad)/recomb_functions.Gamma_compton(xe0, TCMB_init, YHe))
 
         initial_state = jnp.array([xe0, Tm0])
         term = ODETerm(self.xe_tm_derivative)
@@ -489,7 +492,7 @@ class hydrogen_model(eqx.Module):
         sol = diffeqsolve(
             term, solver, t0=t0, t1=t1, dt0=1e-3, 
             y0=initial_state, 
-            args=(h, omega_b, omega_cdm, Neff, YHe, cosmology.omega_rad0(Neff)),
+            args=(h, omega_b, omega_cdm, Neff, YHe, omega_rad),
             stepsize_controller=PIDController(rtol, atol),saveat=save_at,
             adjoint=adjoint,
             max_steps=max_steps
