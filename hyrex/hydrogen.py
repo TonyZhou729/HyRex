@@ -4,7 +4,7 @@ import jax.numpy as jnp
 from jax import config, lax, grad
 import equinox as eqx
 
-from diffrax import diffeqsolve, SaveAt, ODETerm, Tsit5, Kvaerno3, PIDController, DiscreteTerminatingEvent, ForwardMode
+from diffrax import diffeqsolve, SaveAt, ODETerm, Tsit5, Kvaerno3, PIDController, DiscreteTerminatingEvent, ForwardMode, Event
 
 from . import cosmology
 from .cosmology import mH, c, hbar, kB
@@ -176,16 +176,30 @@ class hydrogen_model(eqx.Module):
 
         ### HYREC2 EMLA ONLY PHASE ###
 
-        xe_output_late, Tm_output_late = self.solve_emla(self.lna_axis_late, xe_4He_post_2g.lastval, h, omega_b, omega_cdm, Neff, YHe, rtol, atol, solver)
+        xe_output_late, Tm_output_late, lna_output_late = self.solve_emla(self.lna_axis_late, xe_4He_post_2g.lastval, 
+                                                         h, omega_b, omega_cdm, Neff, YHe, rtol, atol, solver)
 
-        lna_Tm = array_with_padding(self.lna_axis_late)
+        # lna_Tm = array_with_padding(self.lna_axis_late)
+        lna_Tm = array_with_padding(lna_output_late)
         Tm = array_with_padding(Tm_output_late)
 
         xe_4He_post_2g_late = xe_4He_post_2g.concat(array_with_padding(xe_output_late))
-        lna_4He_post_2g_late = lna_4He_post_2g.concat(array_with_padding(self.lna_axis_late))
+        # lna_4He_post_2g_late = lna_4He_post_2g.concat(array_with_padding(self.lna_axis_late))
+        lna_4He_post_2g_late = lna_4He_post_2g.concat(lna_Tm)
         ### END OF HYREC2 EMLA ONLY PHASE ###
 
-        return (xe_4He_post_2g_late, lna_4He_post_2g_late, Tm, lna_Tm)
+        ### Begin TLA phase ###
+        xe_output_TLA, Tm_output_TLA, lna_output_TLA = self.solve_TLA(lna_Tm.lastval, self.lna_axis_late, 
+                                                                      xe_4He_post_2g_late.lastval, Tm.lastval, 
+                                                                      h, omega_b, omega_cdm, Neff, YHe)
+
+        xe_all = xe_4He_post_2g_late.concat(array_with_padding(xe_output_TLA))
+        lna_all = lna_4He_post_2g_late.concat(array_with_padding(lna_output_TLA))
+        Tm_all = Tm.concat(array_with_padding(Tm_output_TLA))
+        
+        
+        # return (xe_4He_post_2g_late, lna_4He_post_2g_late, Tm, lna_Tm)
+        return (xe_all, lna_all, Tm_all, lna_Tm)
 
 
     def post_Saha_expansion(self, starting_lna, h, omega_b, omega_cdm, Neff, YHe, threshold=1e-5):
@@ -481,7 +495,8 @@ class hydrogen_model(eqx.Module):
 
         t0 = lna_axis.min()-self.integration_spacing # need to back up a step since that's where we specified xe0
         t1 = lna_axis.max()
-        save_at = SaveAt(ts=lna_axis) # but start saving output at step 1 or later
+        # save_at = SaveAt(ts=lna_axis[10:-10]) # but start saving output at step 0 or later
+        saveat = SaveAt(dense=True, t0=True, t1=True)
         TCMB_init = cosmology.TCMB(jnp.exp(-t0) - 1.) 
 
         Tm0 = TCMB_init * (1.-cosmology.Hubble(1/jnp.exp(t0) - 1, h, omega_b, omega_cdm, omega_rad)/recomb_functions.Gamma_compton(xe0, TCMB_init, YHe))
@@ -490,19 +505,58 @@ class hydrogen_model(eqx.Module):
         term = ODETerm(self.xe_tm_derivative)
         adjoint=ForwardMode()
 
+        def temperature_check(t, y, args, **kwargs):
+            lna = t
+            _, Tm = y # current Tm
+            z = jnp.exp(-lna) - 1
+            TCMB = cosmology.TCMB(z)
+            TR_MIN = 0.004   # Minimum Tr in eV 
+            T_RATIO_MIN = 0.1   # Minimum Tratio 
+            ratio = jnp.minimum(Tm / TCMB, TCMB / Tm)
+            # Use JAX-safe boolean ops; add parentheses for correct precedence
+            return jnp.logical_and(TCMB < TR_MIN, ratio < T_RATIO_MIN) # stop when false
+        
+        event = Event(temperature_check)
+
         sol = diffeqsolve(
             term, solver, t0=t0, t1=t1, dt0=1e-3, 
             y0=initial_state, 
             args=(h, omega_b, omega_cdm, Neff, YHe, omega_rad),
-            stepsize_controller=PIDController(rtol, atol),saveat=save_at,
+            stepsize_controller=PIDController(rtol, atol),saveat=saveat,
             adjoint=adjoint,
-            max_steps=max_steps
+            max_steps=max_steps,
+            event = event
         )
-        
-        xe_output = sol.ys[:, 0] 
-        Tm_output = sol.ys[:, 1] 
 
-        return xe_output, Tm_output
+        t1_nominal = t1  # your original target end time, used only to size the grid
+
+        def sample_on_fixed_grid(sol, t0, t1_nominal, pad_value=jnp.inf):
+            # 2) Build a fixed-size grid up to the *nominal* end time.
+            #    Do this with a Python int so the length is static under jit.
+            n_max = int(np.floor((t1_nominal - t0) / self.integration_spacing)) + 1
+            ts_fixed = t0 + self.integration_spacing * jnp.arange(n_max)
+
+            # 3) Clamp evaluation times to the actual end (so evaluate() stays in-domain),
+            #    then mask anything beyond sol.t1 to a pad value (NaN by default).
+            ts_clamped = jnp.minimum(ts_fixed, sol.t1)
+            ys_eval = sol.evaluate(ts_clamped)  # shape (n_max, state_dim)
+
+            valid_mask = ts_fixed <= sol.t1
+            ys_fixed = jnp.where(valid_mask[:, None], ys_eval, pad_value)
+
+            n_valid = jnp.sum(valid_mask)  # how many samples are "real"
+            return ts_fixed, ys_fixed, valid_mask, n_valid
+
+        ts_fixed, ys_fixed, valid_mask, n_valid = sample_on_fixed_grid(sol, t0, t1_nominal)
+        xe_output = ys_fixed[:,0]
+        Tm_output = ys_fixed[:,1]
+        return xe_output, Tm_output, ts_fixed
+
+        
+        # xe_output = sol.ys[:, 0] 
+        # Tm_output = sol.ys[:, 1] 
+
+        # return xe_output, Tm_output, sol.ts
 
     def dxe_dlna_twophoton(self, xe, TCMB, Tm, H, nH, Delta):
 
@@ -676,3 +730,42 @@ class hydrogen_model(eqx.Module):
         RLya = 8.*jnp.pi*H/3./nH/x1s/lambda_lya**3      # Rate of escape of Lyman-alpha
         RLyn = (4*(n**2-1)/3/n**2)**3 * RLya            # (lambda_lya/lambda_lyn)^3 * RLya
         return RLyn
+    
+
+  
+    def TLA_xe_deriv(self, lna, state, args):
+        xe, Tm  = state
+        omega_b, omega_cdm, h, Neff, YHe = args
+
+        xHII = xe # since everything else is fully recombined
+        z = jnp.exp(-lna) - 1
+        omega_rad = cosmology.omega_rad0(Neff)
+        nH = cosmology.nH(z, omega_b, YHe) # Get current hydrogen density.
+        H = cosmology.Hubble(z, h, omega_b, omega_cdm, omega_rad) # Get current Hubble.
+        TCMB = cosmology.TCMB(z) # Get current CMB temperature.
+        return recomb_functions.peebles_C(z, xHII, H, nH) * (recomb_functions.beta_H(TCMB) * (1-xe) - 
+                                                             recomb_functions.alpha_H(Tm)*nH*xe**2), Tm
+    
+    def solve_TLA(self, lna0, lna_axis, xe0, Tm0, h, omega_b, omega_cdm, Neff, YHe, solver=Kvaerno3(),rtol=1e-7, atol=1e-9, max_steps = 4096):
+
+        t0 = lna0
+        t1 = lna_axis.max()
+        save_at = SaveAt(ts=lna_axis) # but start saving output at step 1 or later
+
+        initial_state = xe0, Tm0
+        term = ODETerm(self.TLA_xe_deriv)
+        adjoint=ForwardMode()
+
+        sol = diffeqsolve(
+            term, solver, t0=t0, t1=t1, dt0=1e-3, 
+            y0=initial_state, 
+            args=(omega_b, omega_cdm, h, Neff, YHe),
+            stepsize_controller=PIDController(rtol, atol),saveat=save_at,
+            adjoint=adjoint,
+            max_steps=max_steps
+        )
+        
+        xe_output = sol.ys[:, 0] 
+        Tm_output = sol.ys[:, 1] 
+
+        return xe_output, Tm_output, sol.ts
