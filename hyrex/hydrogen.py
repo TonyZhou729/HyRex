@@ -1,7 +1,7 @@
 import numpy as np
 
 import jax.numpy as jnp
-from jax import config, lax, grad, vmap
+from jax import config, lax, grad
 import equinox as eqx
 
 from diffrax import diffeqsolve, SaveAt, ODETerm, Tsit5, Kvaerno3, PIDController, ForwardMode, Event
@@ -76,7 +76,7 @@ class hydrogen_model(eqx.Module):
         self.lna_axis_late = lna_axis_late
         self.concrete_axis_size = jnp.zeros(Nsteps)
 
-        # pull in hydrogen
+        # pull in helium
         self.xe_4He = xe_4He
         self.lna_4He = lna_4He
 
@@ -179,12 +179,10 @@ class hydrogen_model(eqx.Module):
         xe_output_late, Tm_output_late, lna_output_late = self.solve_emla(self.lna_axis_late, xe_4He_post_2g.lastval, 
                                                          h, omega_b, omega_cdm, Neff, YHe, rtol, atol, solver)
 
-        # lna_Tm = array_with_padding(self.lna_axis_late)
         lna_Tm = array_with_padding(lna_output_late)
         Tm = array_with_padding(Tm_output_late)
 
         xe_4He_post_2g_late = xe_4He_post_2g.concat(array_with_padding(xe_output_late))
-        # lna_4He_post_2g_late = lna_4He_post_2g.concat(array_with_padding(self.lna_axis_late))
         lna_4He_post_2g_late = lna_4He_post_2g.concat(lna_Tm)
         ### END OF HYREC2 EMLA ONLY PHASE ###
 
@@ -197,9 +195,8 @@ class hydrogen_model(eqx.Module):
         lna_all = lna_4He_post_2g_late.concat(array_with_padding(lna_output_TLA))
         Tm_all = Tm.concat(array_with_padding(Tm_output_TLA))
         lna_Tm_all = lna_Tm.concat(array_with_padding(lna_output_TLA))
+        ### End TLA ###
         
-        
-        # return (xe_4He_post_2g_late, lna_4He_post_2g_late, Tm, lna_Tm)
         return (xe_all, lna_all, Tm_all, lna_Tm_all)
 
 
@@ -513,8 +510,8 @@ class hydrogen_model(eqx.Module):
             _, Tm = y
             z = jnp.exp(-lna) - 1
             TCMB = cosmology.TCMB(z)
-            TR_MIN = 0.004   # Minimum Tcmb in eV 
-            T_RATIO_MIN = 0.1   # Minimum Tratio 
+            TR_MIN = recomb_functions.TR_MIN    # Minimum Tcmb in eV 
+            T_RATIO_MIN = recomb_functions.T_RATIO_MIN   # Minimum Tratio 
             ratio = jnp.minimum(Tm / TCMB, TCMB / Tm)
             return jnp.logical_or(TCMB < TR_MIN, ratio < T_RATIO_MIN) # stop when true
         

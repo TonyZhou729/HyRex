@@ -1,6 +1,6 @@
 import numpy as np
 import jax.numpy as jnp
-from jax import config
+from jax import config, devices, device_put
 from jax.scipy.ndimage import map_coordinates
 from .cosmology import  TCMB,  me, mu_e, c, hbar, kB
 config.update("jax_enable_x64", True)
@@ -14,6 +14,15 @@ R_tab     = jnp.array(np.loadtxt(file_dir+"/tabs/R_inf.dat"))
 
 #Tabulated values of 2s-2p transition rates to interpolate.
 alpha_tab = jnp.array(np.loadtxt(file_dir+"/tabs/Alpha_inf.dat"))
+
+try:
+    gpus = devices('gpu')
+    R_tab = device_put(
+        R_tab, device=gpus[0])
+    alpha_tab = device_put(
+        alpha_tab, device=gpus[0])
+except: 
+    pass
 
 # File handling and interpolating related constants.
 # Do not change these unless something about the tabulated files have changed.
@@ -43,6 +52,7 @@ thomson_xsec = jnp.float64(6.652458734e-25)    # Thomson cross section, in cm^2
 stef_bolt    = jnp.pi**2 / (60.*hbar**3*c**2)  # Stefan-Boltzmann constant, eV^{-3} cm^{-2} s^{-1}
 
 R2s1s        = jnp.float64(8.2206)             # 2s to 1s transition rate, in s^{-1}
+
 
 def alpha_H(Tm):
     """

@@ -553,6 +553,9 @@ class helium_model(eqx.Module):
         def He_check(t, y, args, **kwargs):
             lna = t
             xH1 = self.xH1_Saha(lna, omega_b, YHe)
+            
+            # use xe  = xHeII + (1.-xH1)
+            # y is current state, [0] flattens jnp.array
             xHeII = y[0] - (1.-xH1)
             return xHeII < 1e-4
 
