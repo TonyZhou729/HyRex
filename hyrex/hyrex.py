@@ -64,7 +64,7 @@ class recomb_model(eqx.Module):
         self.idx_4He_equil = jnp.where(self.lna_axis_full <= -jnp.log(self.He4equil_redshift))[0]
         self.idx_late  = jnp.where(self.lna_axis_full >= -jnp.log(self.twog_redshift))[0]
 
-    # @jit
+    @jit
     def __call__(self, h, omega_b, omega_cdm, Neff, YHe, z_reion = 11, Delta_z_reion = 0.5, z_reion_He = 3.5, Delta_z_reion_He = 0.5, exp_reion = 1.5, rtol=1e-6, atol=1e-9,solver=Kvaerno3(),max_steps=1024):
         """
         Compute complete recombination and reionization history.

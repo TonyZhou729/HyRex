@@ -1,10 +1,12 @@
 import numpy as np
 
 import jax.numpy as jnp
-from jax import config, lax, grad
+from jax import config, lax, grad, vmap
 import equinox as eqx
 
 from diffrax import diffeqsolve, SaveAt, ODETerm, Tsit5, Kvaerno3, PIDController, DiscreteTerminatingEvent, ForwardMode, Event
+
+import jax
 
 from . import cosmology
 from .cosmology import mH, c, hbar, kB
@@ -494,9 +496,17 @@ class hydrogen_model(eqx.Module):
         omega_rad = cosmology.omega_rad0(Neff)
 
         t0 = lna_axis.min()-self.integration_spacing # need to back up a step since that's where we specified xe0
-        t1 = lna_axis.max()
-        # save_at = SaveAt(ts=lna_axis[10:-10]) # but start saving output at step 0 or later
-        saveat = SaveAt(dense=True, t0=True, t1=True)
+        # t1 = lna_axis.max()
+        # save_at = SaveAt(ts=lna_axis) # but start saving output at step 0 or later
+        # saveat = SaveAt(dense=True, t0=True, t1=True)
+
+        t1 = jnp.inf # lna_axis.max
+
+        # need to go at least twice max_steps to make sure we catch the t1 we actually want
+        t_arr = jnp.linspace(t0+self.integration_spacing, t0+2*max_steps*self.integration_spacing, 2*max_steps)
+
+        save_at = SaveAt(ts=t_arr) 
+
         TCMB_init = cosmology.TCMB(jnp.exp(-t0) - 1.) 
 
         Tm0 = TCMB_init * (1.-cosmology.Hubble(1/jnp.exp(t0) - 1, h, omega_b, omega_cdm, omega_rad)/recomb_functions.Gamma_compton(xe0, TCMB_init, YHe))
@@ -507,14 +517,13 @@ class hydrogen_model(eqx.Module):
 
         def temperature_check(t, y, args, **kwargs):
             lna = t
-            _, Tm = y # current Tm
+            _, Tm = y
             z = jnp.exp(-lna) - 1
             TCMB = cosmology.TCMB(z)
             TR_MIN = 0.004   # Minimum Tr in eV 
             T_RATIO_MIN = 0.1   # Minimum Tratio 
             ratio = jnp.minimum(Tm / TCMB, TCMB / Tm)
-            # Use JAX-safe boolean ops; add parentheses for correct precedence
-            return jnp.logical_and(TCMB < TR_MIN, ratio < T_RATIO_MIN) # stop when false
+            return jnp.logical_or(TCMB < TR_MIN, ratio < T_RATIO_MIN) # stop when true
         
         event = Event(temperature_check)
 
@@ -522,35 +531,46 @@ class hydrogen_model(eqx.Module):
             term, solver, t0=t0, t1=t1, dt0=1e-3, 
             y0=initial_state, 
             args=(h, omega_b, omega_cdm, Neff, YHe, omega_rad),
-            stepsize_controller=PIDController(rtol, atol),saveat=saveat,
+            stepsize_controller=PIDController(rtol, atol),saveat=save_at,
             adjoint=adjoint,
             max_steps=max_steps,
             event = event
         )
 
-        t1_nominal = t1  # your original target end time, used only to size the grid
+        # t1_nominal = t1  # your original target end time, used only to size the grid
 
-        def sample_on_fixed_grid(sol, t0, t1_nominal, pad_value=jnp.inf):
-            # 2) Build a fixed-size grid up to the *nominal* end time.
-            #    Do this with a Python int so the length is static under jit.
-            n_max = int(np.floor((t1_nominal - t0) / self.integration_spacing)) + 1
-            ts_fixed = t0 + self.integration_spacing * jnp.arange(n_max)
+        # def sample_on_fixed_grid(sol, t0, t1_nominal, spacing, N_MAX, pad_y=jnp.inf, pad_t=jnp.inf):
+        #     # Build a fixed-size grid [t0, t0+(N_MAX-1)*spacing]
+        #     idx = jnp.arange(N_MAX, dtype=jnp.int32)
+        #     ts_full = jnp.asarray(t0, dtype=sol.t0.dtype) + spacing * idx.astype(sol.t0.dtype)
 
-            # 3) Clamp evaluation times to the actual end (so evaluate() stays in-domain),
-            #    then mask anything beyond sol.t1 to a pad value (NaN by default).
-            ts_clamped = jnp.minimum(ts_fixed, sol.t1)
-            ys_eval = sol.evaluate(ts_clamped)  # shape (n_max, state_dim)
+        #     # How many points would the nominal range require? (dynamic, but we *mask*, not resize)
+        #     n_dyn = (jnp.floor((t1_nominal - t0) / spacing).astype(jnp.int32) + 1).clip(0, N_MAX)
+        #     in_nominal = idx < n_dyn
 
-            valid_mask = ts_fixed <= sol.t1
-            ys_fixed = jnp.where(valid_mask[:, None], ys_eval, pad_value)
+        #     # Evaluate safely to the left of t1
+        #     t1_left = jnp.nextafter(sol.t1, -jnp.inf)
+        #     ts_eval = jnp.minimum(ts_full, t1_left)
+        #     ys_eval = jax.vmap(lambda t: sol.evaluate(t))(ts_eval)
 
-            n_valid = jnp.sum(valid_mask)  # how many samples are "real"
-            return ts_fixed, ys_fixed, valid_mask, n_valid
+        #     finite_mask = jnp.all(jnp.isfinite(ys_eval), axis=1)
+        #     time_mask   = ts_full < t1_left
+        #     valid_mask  = in_nominal & time_mask & finite_mask
 
-        ts_fixed, ys_fixed, valid_mask, n_valid = sample_on_fixed_grid(sol, t0, t1_nominal)
-        xe_output = ys_fixed[:,0]
-        Tm_output = ys_fixed[:,1]
-        return xe_output, Tm_output, ts_fixed
+        #     ys_out = jnp.where(valid_mask[:, None], ys_eval, pad_y)
+        #     ts_out = jnp.where(valid_mask, ts_full, pad_t)
+        #     return ts_out, ys_out, valid_mask
+
+        # ts_fixed, ys_fixed, _ = sample_on_fixed_grid(sol, t0, t1_nominal, self.integration_spacing, N_MAX=2*max_steps)
+
+        # # can't use jnp.nan_to_num, it tries to truncate infs too
+        # xe_output = jnp.where(jnp.isnan(ys_fixed[:, 0]), jnp.inf, ys_fixed[:, 0])
+        # Tm_output = jnp.where(jnp.isnan(ys_fixed[:, 1]), jnp.inf, ys_fixed[:, 1])
+        xe_output = jnp.where(jnp.isnan(sol.ys[:, 0]) , jnp.inf, sol.ys[:, 0])
+        Tm_output = jnp.where(jnp.isnan(sol.ys[:, 1]) , jnp.inf, sol.ys[:, 1])
+
+        # return xe_output, Tm_output, jnp.where(jnp.isnan(ts_fixed), jnp.inf, ts_fixed)
+        return xe_output, Tm_output, jnp.where(jnp.isnan(sol.ts), jnp.inf, sol.ts)
 
         
         # xe_output = sol.ys[:, 0] 
@@ -733,28 +753,67 @@ class hydrogen_model(eqx.Module):
     
 
   
+    # def TLA_xe_deriv(self, lna, state, args):
+    #     xe, Tm  = state
+    #     omega_b, omega_cdm, h, Neff, YHe = args
+
+    #     xHII = xe # since everything else is fully recombined
+    #     z = jnp.exp(-lna) - 1
+    #     omega_rad = cosmology.omega_rad0(Neff)
+    #     nH = cosmology.nH(z, omega_b, YHe) # Get current hydrogen density.
+    #     H = cosmology.Hubble(z, h, omega_b, omega_cdm, omega_rad) # Get current Hubble.
+    #     TCMB = cosmology.TCMB(z) # Get current CMB temperature.
+    #     return jnp.array([recomb_functions.peebles_C(z, xHII, H, nH) * (recomb_functions.beta_H(TCMB) * (1-xe) - 
+    #                                                          recomb_functions.alpha_H(Tm)*nH*xe**2), Tm])
+
     def TLA_xe_deriv(self, lna, state, args):
-        xe, Tm  = state
+        xe, Tm = state
+        # jax.debug.print("{xe}, {Tm}, {lna}",xe=xe,Tm=Tm,lna=lna)
         omega_b, omega_cdm, h, Neff, YHe = args
 
-        xHII = xe # since everything else is fully recombined
-        z = jnp.exp(-lna) - 1
+        # Background
+        z = jnp.exp(-lna) - 1.0
         omega_rad = cosmology.omega_rad0(Neff)
-        nH = cosmology.nH(z, omega_b, YHe) # Get current hydrogen density.
-        H = cosmology.Hubble(z, h, omega_b, omega_cdm, omega_rad) # Get current Hubble.
-        TCMB = cosmology.TCMB(z) # Get current CMB temperature.
-        return recomb_functions.peebles_C(z, xHII, H, nH) * (recomb_functions.beta_H(TCMB) * (1-xe) - 
-                                                             recomb_functions.alpha_H(Tm)*nH*xe**2), Tm
+        nH = cosmology.nH(z, omega_b, YHe)                       # physical H number density
+        H  = cosmology.Hubble(z, h, omega_b, omega_cdm, omega_rad)
+        TCMB = cosmology.TCMB(z)
+
+        # Peebles 3-level atom (hydrogen only here)
+        C = recomb_functions.peebles_C(z, xe, H, nH)
+        alpha = recomb_functions.alpha_H(Tm)                      # recombination coeff (case-B)
+        beta  = recomb_functions.beta_H(Tm)                       # photoionization coeff (via detailed balance)
+
+        # dxe/d(lna) = (1/H) * dxe/dt
+        dxe_dt = C * (beta * (1.0 - xe) - alpha * nH * xe**2)
+        dxe_dloga = dxe_dt / H
+
+        # Compton coupling (example form; replace with your helper if you have one)
+        # Gamma_C = (8*sigma_T*a_R*TCMB**4 / (3*m_e*c)) * (xe / (1.0 + fHe + xe))
+
+        # dTm/d(lna) = -2*Tm + (Gamma_C/H) * (TCMB - Tm)
+        dTm_dloga = -2.0 * Tm + (recomb_functions.Gamma_compton(xe, TCMB, YHe) / H) * (TCMB - Tm)
+
+        return jnp.array([dxe_dloga, dTm_dloga])
     
     def solve_TLA(self, lna0, lna_axis, xe0, Tm0, h, omega_b, omega_cdm, Neff, YHe, solver=Kvaerno3(),rtol=1e-7, atol=1e-9, max_steps = 4096):
 
         t0 = lna0
-        t1 = lna_axis.max()
-        save_at = SaveAt(ts=lna_axis) # but start saving output at step 1 or later
+        t1 = jnp.inf # lna_axis.max
 
-        initial_state = xe0, Tm0
+        # need to go at least twice max_steps to make sure we catch t1
+        t_arr = jnp.linspace(t0+self.integration_spacing, t0+2*max_steps*self.integration_spacing, 2*max_steps)
+
+        save_at = SaveAt(ts=t_arr) 
+        # save_at = SaveAt(ts=lna_axis) # but start saving output at step 1 or later
+
+        initial_state = jnp.array([xe0, Tm0])
         term = ODETerm(self.TLA_xe_deriv)
         adjoint=ForwardMode()
+
+        def lna_check(t, y, args, **kwargs):
+            return t > jnp.max(lna_axis) # stop when true
+        
+        event = Event(lna_check)
 
         sol = diffeqsolve(
             term, solver, t0=t0, t1=t1, dt0=1e-3, 
@@ -762,10 +821,11 @@ class hydrogen_model(eqx.Module):
             args=(omega_b, omega_cdm, h, Neff, YHe),
             stepsize_controller=PIDController(rtol, atol),saveat=save_at,
             adjoint=adjoint,
-            max_steps=max_steps
+            max_steps=max_steps,
+            event=event
         )
         
-        xe_output = sol.ys[:, 0] 
-        Tm_output = sol.ys[:, 1] 
+        xe_output = jnp.where(jnp.isnan(sol.ys[:, 0]) , jnp.inf, sol.ys[:, 0])
+        Tm_output = jnp.where(jnp.isnan(sol.ys[:, 1]) , jnp.inf, sol.ys[:, 1])
 
-        return xe_output, Tm_output, sol.ts
+        return xe_output, Tm_output, jnp.where(jnp.isnan(sol.ts), jnp.inf, sol.ts)
