@@ -2,7 +2,7 @@ import jax.numpy as jnp
 from jax import jit, config, lax, grad
 import equinox as eqx
 
-from diffrax import diffeqsolve, SaveAt, ODETerm, Kvaerno3, PIDController, DiscreteTerminatingEvent, ForwardMode
+from diffrax import diffeqsolve, SaveAt, ODETerm, Kvaerno3, PIDController, ForwardMode, Event
 
 from . import cosmology
 from .cosmology import kB
@@ -550,12 +550,10 @@ class helium_model(eqx.Module):
         save_at = SaveAt(ts=t_arr)
         adjoint=ForwardMode()
 
-        def He_check(state, **kwargs):
-            lna = state.tprev
+        def He_check(t, y, args, **kwargs):
+            lna = t
             xH1 = self.xH1_Saha(lna, omega_b, YHe)
-
-            # use xe  = xHeII + (1.-xH1)
-            xHeII = state.y[0] - (1.-xH1)
+            xHeII = y[0] - (1.-xH1)
             return xHeII < 1e-4
 
         sol = diffeqsolve(
@@ -563,12 +561,13 @@ class helium_model(eqx.Module):
             y0=initial_state, 
             args=(h, omega_b, omega_cdm, Neff, YHe),
             stepsize_controller=PIDController(rtol, atol),saveat=save_at,
-            discrete_terminating_event = DiscreteTerminatingEvent(He_check),
+            event=Event(He_check),
             adjoint=adjoint
         )
-        
+
         xe_output = sol.ys[:, 0]  
         lna_output = sol.ts
+
 
         return xe_output, lna_output
 

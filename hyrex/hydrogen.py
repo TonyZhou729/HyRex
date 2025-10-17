@@ -4,7 +4,7 @@ import jax.numpy as jnp
 from jax import config, lax, grad, vmap
 import equinox as eqx
 
-from diffrax import diffeqsolve, SaveAt, ODETerm, Tsit5, Kvaerno3, PIDController, DiscreteTerminatingEvent, ForwardMode, Event
+from diffrax import diffeqsolve, SaveAt, ODETerm, Tsit5, Kvaerno3, PIDController, ForwardMode, Event
 
 from . import cosmology
 from .cosmology import mH, c, hbar, kB
@@ -393,22 +393,21 @@ class hydrogen_model(eqx.Module):
         save_at = SaveAt(ts=t_arr) 
         adjoint=ForwardMode()
 
-        def lna_check(state, **kwargs):
-            lna = state.tprev
-            return lna > lna_axis_final
-        
-        # use diffrax default max_steps of 4096
+        def lna_check(t, y, args, **kwargs):
+            return t > lna_axis_final
+
         sol = diffeqsolve(
             term, solver, t0=t0, t1=t1, dt0=1e-3, 
             y0=initial_state, 
             args=(h, omega_b, omega_cdm, Neff, YHe),
-            stepsize_controller=PIDController(rtol, atol),saveat=save_at,
-            discrete_terminating_event = DiscreteTerminatingEvent(lna_check),
+            stepsize_controller=PIDController(rtol, atol), saveat=save_at,
+            event=Event(lna_check),
             adjoint=adjoint
         )
-        
+
         xe_output = sol.ys
         lna_output = sol.ts
+
 
         return xe_output, lna_output
 
@@ -514,7 +513,7 @@ class hydrogen_model(eqx.Module):
             _, Tm = y
             z = jnp.exp(-lna) - 1
             TCMB = cosmology.TCMB(z)
-            TR_MIN = 0.004   # Minimum Tr in eV 
+            TR_MIN = 0.004   # Minimum Tcmb in eV 
             T_RATIO_MIN = 0.1   # Minimum Tratio 
             ratio = jnp.minimum(Tm / TCMB, TCMB / Tm)
             return jnp.logical_or(TCMB < TR_MIN, ratio < T_RATIO_MIN) # stop when true
@@ -531,11 +530,10 @@ class hydrogen_model(eqx.Module):
             event = event
         )
 
+        xe_output = sol.ys[:, 0]
+        Tm_output = sol.ys[:, 1]
 
-        xe_output = jnp.where(jnp.isnan(sol.ys[:, 0]) , jnp.inf, sol.ys[:, 0])
-        Tm_output = jnp.where(jnp.isnan(sol.ys[:, 1]) , jnp.inf, sol.ys[:, 1])
-
-        return xe_output, Tm_output, jnp.where(jnp.isnan(sol.ts), jnp.inf, sol.ts)
+        return xe_output, Tm_output, sol.ts
 
 
     def dxe_dlna_twophoton(self, xe, TCMB, Tm, H, nH, Delta):
@@ -826,7 +824,7 @@ class hydrogen_model(eqx.Module):
             event=event
         )
         
-        xe_output = jnp.where(jnp.isnan(sol.ys[:, 0]) , jnp.inf, sol.ys[:, 0])
-        Tm_output = jnp.where(jnp.isnan(sol.ys[:, 1]) , jnp.inf, sol.ys[:, 1])
+        xe_output = sol.ys[:, 0]
+        Tm_output = sol.ys[:, 1]
 
-        return xe_output, Tm_output, jnp.where(jnp.isnan(sol.ts), jnp.inf, sol.ts)
+        return xe_output, Tm_output, sol.ts
