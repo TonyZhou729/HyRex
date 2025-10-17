@@ -6,8 +6,6 @@ import equinox as eqx
 
 from diffrax import diffeqsolve, SaveAt, ODETerm, Tsit5, Kvaerno3, PIDController, DiscreteTerminatingEvent, ForwardMode, Event
 
-import jax
-
 from . import cosmology
 from .cosmology import mH, c, hbar, kB
 from . import recomb_functions
@@ -314,18 +312,17 @@ class hydrogen_model(eqx.Module):
         xe : float
             Current ionization fraction
         args : tuple
-            h, omega_b, omega_cdm, Neff, YHe, omega_rad; the Hubble parameter,
+            h, omega_b, omega_cdm, Neff, YHe; the Hubble parameter,
             the baryon denisty Omega_b h^2, the CDM density Omega_cdm h^2, 
-            the effecgive number of neutrinos, the helium fraction, and 
-            the radiation energy density (determined by Neff and can be 
-            computed by cosmology.omega_rad0(Neff))
+            the effecgive number of neutrinos, and the helium fraction
 
         Returns:
         --------
         float
             Time derivative dxe/dlna (units: dimensionless)
         """
-        h, omega_b, omega_cdm, Neff, YHe, omega_rad = args
+        h, omega_b, omega_cdm, Neff, YHe = args
+        omega_rad = cosmology.omega_rad0(Neff)
     
         z = 1. / jnp.exp(lna) - 1.
         x1s = 1. - xe                # fraction of neutral hydrogen
@@ -404,7 +401,7 @@ class hydrogen_model(eqx.Module):
         sol = diffeqsolve(
             term, solver, t0=t0, t1=t1, dt0=1e-3, 
             y0=initial_state, 
-            args=(h, omega_b, omega_cdm, Neff, YHe, cosmology.omega_rad0(Neff)),
+            args=(h, omega_b, omega_cdm, Neff, YHe),
             stepsize_controller=PIDController(rtol, atol),saveat=save_at,
             discrete_terminating_event = DiscreteTerminatingEvent(lna_check),
             adjoint=adjoint
@@ -430,11 +427,9 @@ class hydrogen_model(eqx.Module):
         state : array
             Current state [xe, Tm]
         args : tuple
-            h, omega_b, omega_cdm, Neff, YHe, omega_rad; the Hubble parameter,
+            h, omega_b, omega_cdm, Neff, YHe; the Hubble parameter,
             the baryon denisty Omega_b h^2, the CDM density Omega_cdm h^2, 
-            the effecgive number of neutrinos, the helium fraction, and 
-            the radiation energy density (determined by Neff and can be 
-            computed by cosmology.omega_rad0(Neff))
+            the effecgive number of neutrinos, and the helium fraction
 
         Returns:
         --------
@@ -442,7 +437,8 @@ class hydrogen_model(eqx.Module):
             Time derivatives [dxe/dlna, dTm/dlna] (units: dimensionless, eV)
         """
         xe, Tm = state
-        h, omega_b, omega_cdm, Neff, YHe, omega_rad = args
+        h, omega_b, omega_cdm, Neff, YHe = args
+        omega_rad = cosmology.omega_rad0(Neff)
         
         z = 1. / jnp.exp(lna) - 1.   # redshift z
         TCMB = cosmology.TCMB(z)      # eV
@@ -491,17 +487,14 @@ class hydrogen_model(eqx.Module):
         Returns:
         --------
         tuple
-            (xe_output, Tm_output) - ionization fraction and matter temperature arrays
+            (xe_output, Tm_output, lna_output) - ionization fraction, matter temperature, 
+            and lna arrays
         """
 
         omega_rad = cosmology.omega_rad0(Neff)
 
         t0 = lna_axis.min()-self.integration_spacing # need to back up a step since that's where we specified xe0
-        # t1 = lna_axis.max()
-        # save_at = SaveAt(ts=lna_axis) # but start saving output at step 0 or later
-        # saveat = SaveAt(dense=True, t0=True, t1=True)
-
-        t1 = jnp.inf # lna_axis.max
+        t1 = jnp.inf 
 
         # need to go at least twice max_steps to make sure we catch the t1 we actually want
         t_arr = jnp.linspace(t0+self.integration_spacing, t0+2*max_steps*self.integration_spacing, 2*max_steps)
@@ -531,53 +524,19 @@ class hydrogen_model(eqx.Module):
         sol = diffeqsolve(
             term, solver, t0=t0, t1=t1, dt0=1e-3, 
             y0=initial_state, 
-            args=(h, omega_b, omega_cdm, Neff, YHe, omega_rad),
+            args=(h, omega_b, omega_cdm, Neff, YHe),
             stepsize_controller=PIDController(rtol, atol),saveat=save_at,
             adjoint=adjoint,
             max_steps=max_steps,
             event = event
         )
 
-        # t1_nominal = t1  # your original target end time, used only to size the grid
 
-        # def sample_on_fixed_grid(sol, t0, t1_nominal, spacing, N_MAX, pad_y=jnp.inf, pad_t=jnp.inf):
-        #     # Build a fixed-size grid [t0, t0+(N_MAX-1)*spacing]
-        #     idx = jnp.arange(N_MAX, dtype=jnp.int32)
-        #     ts_full = jnp.asarray(t0, dtype=sol.t0.dtype) + spacing * idx.astype(sol.t0.dtype)
-
-        #     # How many points would the nominal range require? (dynamic, but we *mask*, not resize)
-        #     n_dyn = (jnp.floor((t1_nominal - t0) / spacing).astype(jnp.int32) + 1).clip(0, N_MAX)
-        #     in_nominal = idx < n_dyn
-
-        #     # Evaluate safely to the left of t1
-        #     t1_left = jnp.nextafter(sol.t1, -jnp.inf)
-        #     ts_eval = jnp.minimum(ts_full, t1_left)
-        #     ys_eval = jax.vmap(lambda t: sol.evaluate(t))(ts_eval)
-
-        #     finite_mask = jnp.all(jnp.isfinite(ys_eval), axis=1)
-        #     time_mask   = ts_full < t1_left
-        #     valid_mask  = in_nominal & time_mask & finite_mask
-
-        #     ys_out = jnp.where(valid_mask[:, None], ys_eval, pad_y)
-        #     ts_out = jnp.where(valid_mask, ts_full, pad_t)
-        #     return ts_out, ys_out, valid_mask
-
-        # ts_fixed, ys_fixed, _ = sample_on_fixed_grid(sol, t0, t1_nominal, self.integration_spacing, N_MAX=2*max_steps)
-
-        # # can't use jnp.nan_to_num, it tries to truncate infs too
-        # xe_output = jnp.where(jnp.isnan(ys_fixed[:, 0]), jnp.inf, ys_fixed[:, 0])
-        # Tm_output = jnp.where(jnp.isnan(ys_fixed[:, 1]), jnp.inf, ys_fixed[:, 1])
         xe_output = jnp.where(jnp.isnan(sol.ys[:, 0]) , jnp.inf, sol.ys[:, 0])
         Tm_output = jnp.where(jnp.isnan(sol.ys[:, 1]) , jnp.inf, sol.ys[:, 1])
 
-        # return xe_output, Tm_output, jnp.where(jnp.isnan(ts_fixed), jnp.inf, ts_fixed)
         return xe_output, Tm_output, jnp.where(jnp.isnan(sol.ts), jnp.inf, sol.ts)
 
-        
-        # xe_output = sol.ys[:, 0] 
-        # Tm_output = sol.ys[:, 1] 
-
-        # return xe_output, Tm_output, sol.ts
 
     def dxe_dlna_twophoton(self, xe, TCMB, Tm, H, nH, Delta):
 
@@ -754,50 +713,91 @@ class hydrogen_model(eqx.Module):
     
 
   
-    # def TLA_xe_deriv(self, lna, state, args):
-    #     xe, Tm  = state
-    #     omega_b, omega_cdm, h, Neff, YHe = args
-
-    #     xHII = xe # since everything else is fully recombined
-    #     z = jnp.exp(-lna) - 1
-    #     omega_rad = cosmology.omega_rad0(Neff)
-    #     nH = cosmology.nH(z, omega_b, YHe) # Get current hydrogen density.
-    #     H = cosmology.Hubble(z, h, omega_b, omega_cdm, omega_rad) # Get current Hubble.
-    #     TCMB = cosmology.TCMB(z) # Get current CMB temperature.
-    #     return jnp.array([recomb_functions.peebles_C(z, xHII, H, nH) * (recomb_functions.beta_H(TCMB) * (1-xe) - 
-    #                                                          recomb_functions.alpha_H(Tm)*nH*xe**2), Tm])
-
     def TLA_xe_deriv(self, lna, state, args):
-        xe, Tm = state
-        # jax.debug.print("{xe}, {Tm}, {lna}",xe=xe,Tm=Tm,lna=lna)
-        omega_b, omega_cdm, h, Neff, YHe = args
+        """
+        Compute coupled derivatives for ionization fraction and matter temperature
+        using Peebles three-level atom.
 
-        # Background
-        z = jnp.exp(-lna) - 1.0
+        Parameters:
+        -----------
+        lna : float
+            Log scale factor
+        state : array
+            Current state [xe, Tm]
+        args : tuple
+            h, omega_b, omega_cdm, Neff, YHe; the Hubble parameter,
+            the baryon denisty Omega_b h^2, the CDM density Omega_cdm h^2, 
+            the effecgive number of neutrinos, and the helium fraction
+
+        Returns:
+        --------
+        array
+            Time derivatives [dxe/dlna, dTm/dlna] (units: dimensionless, eV)
+        """
+        xe, Tm  = state
+        h, omega_b, omega_cdm, Neff, YHe = args
+
+        xHII = xe # since everything else is fully recombined
+        z = jnp.exp(-lna) - 1
         omega_rad = cosmology.omega_rad0(Neff)
-        nH = cosmology.nH(z, omega_b, YHe)                       # physical H number density
-        H  = cosmology.Hubble(z, h, omega_b, omega_cdm, omega_rad)
-        TCMB = cosmology.TCMB(z)
+        nH = cosmology.nH(z, omega_b, YHe)
+        H = cosmology.Hubble(z, h, omega_b, omega_cdm, omega_rad)
+        TCMB = cosmology.TCMB(z) 
 
-        # Peebles 3-level atom (hydrogen only here)
-        C = recomb_functions.peebles_C(z, xe, H, nH)
-        alpha = recomb_functions.alpha_H(Tm)                      # recombination coeff (case-B)
-        beta  = recomb_functions.beta_H(Tm)                       # photoionization coeff (via detailed balance)
+        C = recomb_functions.peebles_C(z, xHII, H, nH)
+        alpha = recomb_functions.alpha_H(Tm)                     
+        beta  = recomb_functions.beta_H(Tm)                  
 
         # dxe/d(lna) = (1/H) * dxe/dt
         dxe_dt = C * (beta * (1.0 - xe) - alpha * nH * xe**2)
         dxe_dloga = dxe_dt / H
 
-        # Compton coupling (example form; replace with your helper if you have one)
-        # Gamma_C = (8*sigma_T*a_R*TCMB**4 / (3*m_e*c)) * (xe / (1.0 + fHe + xe))
-
-        # dTm/d(lna) = -2*Tm + (Gamma_C/H) * (TCMB - Tm)
         dTm_dloga = -2.0 * Tm + (recomb_functions.Gamma_compton(xe, TCMB, YHe) / H) * (TCMB - Tm)
 
         return jnp.array([dxe_dloga, dTm_dloga])
     
-    def solve_TLA(self, lna0, lna_axis, xe0, Tm0, h, omega_b, omega_cdm, Neff, YHe, solver=Kvaerno3(),rtol=1e-7, atol=1e-9, max_steps = 4096):
+    def solve_TLA(self, lna0, lna_axis, xe0, Tm0, h, omega_b, omega_cdm, Neff, YHe, rtol=1e-7, atol=1e-9, solver=Kvaerno3(), max_steps = 4096):
+        """
+        Solve late-time TLA evolution.
 
+        Integrates hydrogen recombination using Peebles TLA in the region
+        beyond where SWIFT corrections are tabulated.
+
+        Parameters:
+        -----------
+        lna0 : float
+            Starting log scale factor
+        lna_axis : array
+            Log scale factor grid
+        xe0 : float
+            Initial ionization fraction
+        Tm0: float
+            Starting matter temperature
+        h : float
+            Hubble parameter
+        omega_b : float
+            The baryon density Omega_b h^2
+        omega_cdm : float
+            The density of Cold Dark Matter Omega_cdm h^2
+        Neff : float
+            Effective number of neutrinos
+        YHe : float
+            Helium fraction
+        rtol : float, optional
+            Relative tolerance (default: 1e-7)
+        atol : float, optional
+            Absolute tolerance (default: 1e-9)
+        solver : diffrax.Solver, optional
+            ODE solver (default: Tsit5())
+        max_steps : int, optional
+            Maximum steps (default: 4096)
+
+        Returns:
+        --------
+        tuple
+            (xe_output, Tm_output, lna_output) - ionization fraction, matter temperature, 
+            and log scale factor arrays
+        """
         t0 = lna0
         t1 = jnp.inf # lna_axis.max
 
@@ -819,7 +819,7 @@ class hydrogen_model(eqx.Module):
         sol = diffeqsolve(
             term, solver, t0=t0, t1=t1, dt0=1e-3, 
             y0=initial_state, 
-            args=(omega_b, omega_cdm, h, Neff, YHe),
+            args=(h, omega_b, omega_cdm, Neff, YHe),
             stepsize_controller=PIDController(rtol, atol),saveat=save_at,
             adjoint=adjoint,
             max_steps=max_steps,
