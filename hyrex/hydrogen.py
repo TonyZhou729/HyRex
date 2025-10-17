@@ -198,10 +198,11 @@ class hydrogen_model(eqx.Module):
         xe_all = xe_4He_post_2g_late.concat(array_with_padding(xe_output_TLA))
         lna_all = lna_4He_post_2g_late.concat(array_with_padding(lna_output_TLA))
         Tm_all = Tm.concat(array_with_padding(Tm_output_TLA))
+        lna_Tm_all = lna_Tm.concat(array_with_padding(lna_output_TLA))
         
         
         # return (xe_4He_post_2g_late, lna_4He_post_2g_late, Tm, lna_Tm)
-        return (xe_all, lna_all, Tm_all, lna_Tm)
+        return (xe_all, lna_all, Tm_all, lna_Tm_all)
 
 
     def post_Saha_expansion(self, starting_lna, h, omega_b, omega_cdm, Neff, YHe, threshold=1e-5):
