@@ -12,6 +12,7 @@ TCMB_today  = jnp.float64(2.34865418e-4)          # CMB temperature today in eV.
 conv_factor = jnp.float64(3.2407792894443648e-18) # (100 km/s/Mpc) in units of s^{-1}
 mH          = mp+me+13.598286071938324            # Neutral hydrogen atom rest mass, in eV
 mu_e        = mp*me/mH                            # Reduced mass of proton-electron system, in eV
+not4        = 3.97153                             # mHe/mH
 
 def a(z):
     """

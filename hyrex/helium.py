@@ -5,7 +5,7 @@ import equinox as eqx
 from diffrax import diffeqsolve, SaveAt, ODETerm, Kvaerno3, PIDController, ForwardMode, Event
 
 from . import cosmology
-from .cosmology import kB
+from .cosmology import kB, not4
 from . import recomb_functions
 from .array_with_padding import array_with_padding
 config.update("jax_enable_x64", True)
@@ -203,9 +203,9 @@ class helium_model(eqx.Module):
             nH = cosmology.nH(z, omega_b, YHe)
  
             # compute xHeIII
-            fHe = YHe/(1.-YHe)/3.97153 # abundance of helium by number
+            fHe = YHe/(1.-YHe)/not4 # abundance of helium by number
             # Saha ratio xe * xHeIII / xHeII
-            s = 2.414194e15 * TCMB/cosmology.kB * jnp.sqrt(TCMB/cosmology.kB) * jnp.exp(-631462.7 / (TCMB/cosmology.kB)) / nH
+            s = 2.414194e15 * TCMB/kB * jnp.sqrt(TCMB/kB) * jnp.exp(-631462.7 / (TCMB/kB)) / nH
             xHeIII = 2 * s * fHe / (1 + s + fHe) / (1 + jnp.sqrt(1 + 4 * s * fHe / (1 + s + fHe)**2))
             xe = 1 + fHe + xHeIII
 
@@ -264,14 +264,14 @@ class helium_model(eqx.Module):
         float
             HeII fraction (units: dimensionless)
         """
-        fHe = YHe/(1.-YHe)/3.97153
+        fHe = YHe/(1.-YHe)/not4
 
         z = jnp.exp(-lna) - 1.
         TCMB = cosmology.TCMB(z)
         nH = cosmology.nH(z, omega_b, YHe)
 
         # Saha ratio xe * xHeII / xHeI
-        s = 4 * 2.414194e15 * TCMB/cosmology.kB * jnp.sqrt(TCMB/cosmology.kB) * jnp.exp(-285325. / (TCMB/cosmology.kB)) / nH
+        s = 4 * 2.414194e15 * TCMB/kB * jnp.sqrt(TCMB/kB) * jnp.exp(-285325. / (TCMB/kB)) / nH
         xHeII = 2 * s * fHe / (1 + s) / (1 + jnp.sqrt(1 + 4 * s * fHe / (1 + s)**2))
 
         return xHeII
@@ -301,7 +301,7 @@ class helium_model(eqx.Module):
         TCMB = cosmology.TCMB(z)
         nH = cosmology.nH(z, omega_b, YHe)
         xHeII = self.xHeII_post_Saha(lna, omega_b, YHe)
-        s = 2.4127161187130e15* TCMB/cosmology.kB * jnp.sqrt(TCMB/cosmology.kB)*jnp.exp(-157801.37882/(TCMB/cosmology.kB))/nH
+        s = 2.4127161187130e15* TCMB/kB * jnp.sqrt(TCMB/kB)*jnp.exp(-157801.37882/(TCMB/kB))/nH
         xH1 = jnp.where(s>1e5,(1.+xHeII)/s - (xHeII**2 + 3.*xHeII + 2.)/s**2,\
             jnp.where(s==0,1,1.-2./(1.+ xHeII/s + jnp.sqrt((1.+ xHeII/s)*(1.+ xHeII/s) +4./s))))
         return xH1
@@ -418,7 +418,7 @@ class helium_model(eqx.Module):
             HeII recombination rate dxHeII/dlna (units: dimensionless)
         """
 
-        fHe = YHe/(1.-YHe)/3.97153 # abundance of helium by number
+        fHe = YHe/(1.-YHe)/not4 # abundance of helium by number
 
         # cosmology
         #lna = -jnp.log(1+z)
@@ -434,21 +434,21 @@ class helium_model(eqx.Module):
         xHeII = xe - (1.-xH1)
 
         # Saha ratio and abundances
-        s0 = 2.414194e15 * TCMB/cosmology.kB * jnp.sqrt(TCMB/cosmology.kB) / nH * 4
-        s = s0 * jnp.exp(-285325. / (TCMB/cosmology.kB))
-        y2s = jnp.exp(46090. / (TCMB/cosmology.kB)) / s0
-        y2p = jnp.exp(39101. / (TCMB/cosmology.kB)) / s0 * 3
+        s0 = 2.414194e15 * TCMB/kB * jnp.sqrt(TCMB/kB) / nH * 4
+        s = s0 * jnp.exp(-285325. / (TCMB/kB))
+        y2s = jnp.exp(46090. / (TCMB/kB)) / s0
+        y2p = jnp.exp(39101. / (TCMB/kB)) / s0 * 3
         
         # Continuum opacity and optical depth
         etacinv =  9.15776e22 * H / (nH* xH1)
         g2pinc = (
-            1.976e6 / (1 - jnp.exp(-6989. / (TCMB/cosmology.kB))) +
-            6.03e6 / (jnp.exp(19754. / (TCMB/cosmology.kB)) - 1) +
-            1.06e8 / (jnp.exp(21539. / (TCMB/cosmology.kB)) - 1) +
-            2.18e6 / (jnp.exp(28496. / (TCMB/cosmology.kB)) - 1) +
-            3.37e7 / (jnp.exp(29224. / (TCMB/cosmology.kB)) - 1) +
-            1.04e6 / (jnp.exp(32414. / (TCMB/cosmology.kB)) - 1) +
-            1.51e7 / (jnp.exp(32781. / (TCMB/cosmology.kB)) - 1)
+            1.976e6 / (1 - jnp.exp(-6989. / (TCMB/kB))) +
+            6.03e6 / (jnp.exp(19754. / (TCMB/kB)) - 1) +
+            1.06e8 / (jnp.exp(21539. / (TCMB/kB)) - 1) +
+            2.18e6 / (jnp.exp(28496. / (TCMB/kB)) - 1) +
+            3.37e7 / (jnp.exp(29224. / (TCMB/kB)) - 1) +
+            1.04e6 / (jnp.exp(32414. / (TCMB/kB)) - 1) +
+            1.51e7 / (jnp.exp(32781. / (TCMB/kB)) - 1)
         )
         
         # Optical depth and escape probability
@@ -457,7 +457,17 @@ class helium_model(eqx.Module):
         tauc = dnuline / etacinv
         enh = jnp.sqrt(1 + jnp.pi**2 * tauc) + 7.74 * tauc / (1 + 70 * tauc)
         pesc = enh / tau2p
-        
+
+        # As per HYREC-2 https://github.com/nanoomlee/HYREC-2/blob/09e8243d0e08edd3603a94dfbc445ae06cafe139/helium.c#L163:
+        # Effective increase in escape probability via intercombination line
+        # ratio of optical depth to allowed line = 1.023e-7
+        # 1-e^-tau23 = absorption prob. in intercom line
+        # e^[(E21P-E23P)/T] - e^[-(E21P-E23P)*eta_c] = step in intercom line
+        #   relative to N_line in 21P
+        # divide by tau2p to get effective increase in escape prob.
+        # factor of 0.964525 is phase space factor for intercom vs allowed line -- (584/591)^3
+        pesc = pesc + (1.-jnp.exp(-1.023e-7*tau2p))*(0.964525*jnp.exp(2947./(TCMB/kB))-enh*jnp.exp(-6.14e13/etacinv))/tau2p
+
         # Total decay rate
         ydown = (50.94 * y2s) + (1.7989e9 * y2p * pesc)
         

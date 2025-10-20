@@ -2,7 +2,7 @@ import numpy as np
 import jax.numpy as jnp
 from jax import config, devices, device_put
 from jax.scipy.ndimage import map_coordinates
-from .cosmology import  TCMB,  me, mu_e, c, hbar, kB
+from .cosmology import  TCMB,  me, mu_e, c, hbar, kB, not4
 config.update("jax_enable_x64", True)
 
 
@@ -166,7 +166,7 @@ def Gamma_compton(xe, TCMB, YHe):
     # Helium to Hydrogen number density ratio. Here we assumed that all Helium are Helium-4.
     # 1) n_H = (1-YHe)*n_b
     # 2) n_He = (YHe/4)*n_b
-    FHe = YHe/4/(1-YHe)
+    FHe = YHe/not4/(1-YHe)
    
     GammaC = xe / (1.+FHe+xe) * 8.*thomson_xsec*(4.*stef_bolt)*TCMB**4 / (3.*me)
     return GammaC

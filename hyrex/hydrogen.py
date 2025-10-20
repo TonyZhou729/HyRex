@@ -189,7 +189,7 @@ class hydrogen_model(eqx.Module):
         ### END OF HYREC2 EMLA ONLY PHASE ###
 
         ### Begin TLA phase ###
-        xe_output_TLA, Tm_output_TLA, lna_output_TLA = self.solve_TLA(lna_Tm.lastval, 
+        xe_output_TLA, Tm_output_TLA, lna_output_TLA = self.solve_TLA(lna_4He_post_2g_late.lastval, 
                                                                       xe_4He_post_2g_late.lastval, Tm.lastval, 
                                                                       h, omega_b, omega_cdm, Neff, YHe)
 
@@ -338,7 +338,7 @@ class hydrogen_model(eqx.Module):
         return dxedlna
 
 
-    def solve_emla_twophoton(self, lna_axis_init, lna_axis_final, xe0, h, omega_b, omega_cdm, Neff, YHe, rtol=1e-6, atol=1e-9,solver=Kvaerno3(),max_steps=4096):
+    def solve_emla_twophoton(self, lna_axis_init, lna_axis_final, xe0, h, omega_b, omega_cdm, Neff, YHe, rtol=1e-6, atol=1e-9,solver=Kvaerno3(),max_steps=1024):
         """
         Solve HYREC-2 EMLA evolution with two-photon processes.
 
