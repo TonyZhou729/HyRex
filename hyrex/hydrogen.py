@@ -764,8 +764,6 @@ class hydrogen_model(eqx.Module):
         -----------
         lna0 : float
             Starting log scale factor
-        lna_end : float
-            Stopping log scale factor
         xe0 : float
             Initial ionization fraction
         Tm0: float
