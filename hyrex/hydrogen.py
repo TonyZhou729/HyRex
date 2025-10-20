@@ -48,7 +48,7 @@ class hydrogen_model(eqx.Module):
     last_4He_lna : jnp.float64
     twog_redshift : jnp.float64
 
-    def __init__(self,xe_4He,lna_4He,lna_axis_late,last_4He_lna,twog_redshift,integration_spacing = 5.0e-4, Nsteps=800,swift = jnp.array(np.loadtxt(file_dir+"/tabs/fit_swift.dat"))):
+    def __init__(self,xe_4He,lna_4He,lna_end,last_4He_lna,twog_redshift,integration_spacing = 5.0e-4, Nsteps=800,swift = jnp.array(np.loadtxt(file_dir+"/tabs/fit_swift.dat"))):
         """
         Initialize hydrogen recombination model.
 
@@ -58,8 +58,8 @@ class hydrogen_model(eqx.Module):
             Helium ionization fraction from previous calculation
         lna_4He : array_with_padding
             Log scale factor array from helium calculation
-        lna_axis_late : array
-            Late-time log scale factor grid for EMLA-only phase
+        lna_end : array
+            Ending log scale factor
         last_4He_lna : float
             Final log scale factor from helium recombination
         integration_spacing : float, optional
@@ -73,7 +73,7 @@ class hydrogen_model(eqx.Module):
         self.swift = swift
 
         # Define time axes
-        self.lna_axis_late = lna_axis_late
+        self.lna_end = lna_end
         self.concrete_axis_size = jnp.zeros(Nsteps)
 
         # pull in helium
@@ -457,8 +457,6 @@ class hydrogen_model(eqx.Module):
 
         Parameters:
         -----------
-        lna_axis : array
-            Log scale factor grid
         lna0 : float
             Log scale factor at which initial xe is given
         xe0 : float
