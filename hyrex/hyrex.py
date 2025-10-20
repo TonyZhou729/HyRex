@@ -26,9 +26,10 @@ class recomb_model(eqx.Module):
     concrete_axis_size : jnp.array
     concrete_axis_size_postSahaHe : jnp.array
 
+    z1 : jnp.float64
+
     twog_redshift : jnp.float64
     He4equil_redshift : jnp.float64
-    idx_late : jnp.array
     idx_4He_equil : jnp.array
 
     def __init__(self,integration_spacing = 5.0e-4, Nsteps=800, Nsteps_postSahaHe=4000, z0=8000., z1=0.):
@@ -52,6 +53,7 @@ class recomb_model(eqx.Module):
             Final redshift (default: 0.)
         """
         self.integration_spacing = integration_spacing
+        self.z1 = z1
 
         # Define time axes
         self.lna_axis_full  = jnp.arange(-jnp.log(1+z0), -jnp.log(1+z1), self.integration_spacing)
@@ -62,7 +64,6 @@ class recomb_model(eqx.Module):
         self.He4equil_redshift = 3601. # generous
 
         self.idx_4He_equil = jnp.where(self.lna_axis_full <= -jnp.log(self.He4equil_redshift))[0]
-        self.idx_late  = jnp.where(self.lna_axis_full >= -jnp.log(self.twog_redshift))[0]
 
     @jit
     def __call__(self, h, omega_b, omega_cdm, Neff, YHe, z_reion = 11, Delta_z_reion = 0.5, z_reion_He = 3.5, Delta_z_reion_He = 0.5, exp_reion = 1.5, rtol=1e-6, atol=1e-9,solver=Kvaerno3(),max_steps=1024):
@@ -151,10 +152,9 @@ class recomb_model(eqx.Module):
             with reionization, log scale factor, matter temperature, and temperature grid
         """
         lna_axis_4Heequil  = self.lna_axis_full[self.idx_4He_equil]
-        lna_axis_late  = self.lna_axis_full[self.idx_late]
 
         xe_4He, lna_4He = helium_model(lna_axis_4Heequil)(h, omega_b, omega_cdm, Neff, YHe,)
-        xe_full, lna_full, Tm, lna_Tm = hydrogen_model(xe_4He,lna_4He,lna_axis_late,lna_4He.lastval,self.twog_redshift)(h, omega_b, omega_cdm, Neff, YHe)
+        xe_full, lna_full, Tm, lna_Tm = hydrogen_model(xe_4He,lna_4He,-jnp.log(1+self.z1),lna_4He.lastval,self.twog_redshift)(h, omega_b, omega_cdm, Neff, YHe)
 
         ### Hydrogen Reionization ###
         # We patch a simple tanh solution to the tail of the electron fraction result.

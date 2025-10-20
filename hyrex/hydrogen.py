@@ -175,9 +175,9 @@ class hydrogen_model(eqx.Module):
         ### END HYREC2 EMLA + FULL TWO PHOTON PHASE ###
 
         ### HYREC2 EMLA ONLY PHASE ###
-
-        xe_output_late, Tm_output_late, lna_output_late = self.solve_emla(self.lna_axis_late, xe_4He_post_2g.lastval, 
-                                                         h, omega_b, omega_cdm, Neff, YHe, rtol, atol, solver)
+        # do not input max_steps
+        xe_output_late, Tm_output_late, lna_output_late = self.solve_emla(lna_4He_post_2g.lastval, xe_4He_post_2g.lastval, 
+                                                                          h, omega_b, omega_cdm, Neff, YHe, rtol, atol, solver)
 
         lna_Tm = array_with_padding(lna_output_late)
         Tm = array_with_padding(Tm_output_late)
@@ -448,7 +448,7 @@ class hydrogen_model(eqx.Module):
 
         return jnp.array([dxedlna, dTmdlna])
 
-    def solve_emla(self, lna_axis, xe0, h, omega_b, omega_cdm, Neff, YHe,rtol=1e-7, atol=1e-9,solver=Tsit5(),max_steps=4096):
+    def solve_emla(self, lna0, xe0, h, omega_b, omega_cdm, Neff, YHe,rtol=1e-7, atol=1e-9,solver=Tsit5(),max_steps=4096):
         """
         Solve late-time EMLA evolution without two-photon processes.
 
@@ -459,6 +459,8 @@ class hydrogen_model(eqx.Module):
         -----------
         lna_axis : array
             Log scale factor grid
+        lna0 : float
+            Log scale factor at which initial xe is given
         xe0 : float
             Initial ionization fraction
         h : float
@@ -489,7 +491,7 @@ class hydrogen_model(eqx.Module):
 
         omega_rad = cosmology.omega_rad0(Neff)
 
-        t0 = lna_axis.min()-self.integration_spacing # need to back up a step since that's where we specified xe0
+        t0 = lna0
         t1 = jnp.inf 
 
         # need to go at least twice max_steps to make sure we catch the t1 we actually want
@@ -751,7 +753,7 @@ class hydrogen_model(eqx.Module):
 
         return jnp.array([dxe_dloga, dTm_dloga])
     
-    def solve_TLA(self, lna0, lna_axis, xe0, Tm0, h, omega_b, omega_cdm, Neff, YHe, rtol=1e-7, atol=1e-9, solver=Kvaerno3(), max_steps = 4096):
+    def solve_TLA(self, lna0, lna_end, xe0, Tm0, h, omega_b, omega_cdm, Neff, YHe, rtol=1e-7, atol=1e-9, solver=Kvaerno3(), max_steps = 4096):
         """
         Solve late-time TLA evolution.
 
@@ -762,8 +764,8 @@ class hydrogen_model(eqx.Module):
         -----------
         lna0 : float
             Starting log scale factor
-        lna_axis : array
-            Log scale factor grid
+        lna_end : float
+            Stopping log scale factor
         xe0 : float
             Initial ionization fraction
         Tm0: float
@@ -807,7 +809,7 @@ class hydrogen_model(eqx.Module):
         adjoint=ForwardMode()
 
         def lna_check(t, y, args, **kwargs):
-            return t > jnp.max(lna_axis) # stop when true
+            return t > lna_end # stop when true
         
         event = Event(lna_check)
 
