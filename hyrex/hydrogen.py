@@ -39,14 +39,16 @@ class hydrogen_model(eqx.Module):
     """
     integration_spacing : jnp.float64
     swift : jnp.array
-    lna_axis_late : jnp.array
     concrete_axis_size : jnp.array
 
     xe_4He : jnp.array
     lna_4He : jnp.array
+    
 
     last_4He_lna : jnp.float64
     twog_redshift : jnp.float64
+
+    lna_end : jnp.float64
 
     def __init__(self,xe_4He,lna_4He,lna_end,last_4He_lna,twog_redshift,integration_spacing = 5.0e-4, Nsteps=800,swift = jnp.array(np.loadtxt(file_dir+"/tabs/fit_swift.dat"))):
         """
@@ -187,7 +189,7 @@ class hydrogen_model(eqx.Module):
         ### END OF HYREC2 EMLA ONLY PHASE ###
 
         ### Begin TLA phase ###
-        xe_output_TLA, Tm_output_TLA, lna_output_TLA = self.solve_TLA(lna_Tm.lastval, self.lna_axis_late, 
+        xe_output_TLA, Tm_output_TLA, lna_output_TLA = self.solve_TLA(lna_Tm.lastval, 
                                                                       xe_4He_post_2g_late.lastval, Tm.lastval, 
                                                                       h, omega_b, omega_cdm, Neff, YHe)
 
@@ -751,7 +753,7 @@ class hydrogen_model(eqx.Module):
 
         return jnp.array([dxe_dloga, dTm_dloga])
     
-    def solve_TLA(self, lna0, lna_end, xe0, Tm0, h, omega_b, omega_cdm, Neff, YHe, rtol=1e-7, atol=1e-9, solver=Kvaerno3(), max_steps = 4096):
+    def solve_TLA(self, lna0, xe0, Tm0, h, omega_b, omega_cdm, Neff, YHe, rtol=1e-7, atol=1e-9, solver=Kvaerno3(), max_steps = 4096):
         """
         Solve late-time TLA evolution.
 
@@ -807,7 +809,7 @@ class hydrogen_model(eqx.Module):
         adjoint=ForwardMode()
 
         def lna_check(t, y, args, **kwargs):
-            return t > lna_end # stop when true
+            return t > self.lna_end # stop when true
         
         event = Event(lna_check)
 
