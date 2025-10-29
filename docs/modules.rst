@@ -2,6 +2,11 @@ HyRex
 =====
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 2
 
-   HyRex
+   HyRex.array_with_padding
+   HyRex.cosmology
+   HyRex.helium
+   HyRex.hydrogen
+   HyRex.hyrex
+   HyRex.recomb_functions
