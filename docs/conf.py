@@ -303,6 +303,7 @@ def setup(app):
 extensions = [
     "sphinx.ext.autodoc",   # Core extension for docstring extraction
     "sphinx.ext.napoleon",  # For Google/NumPy-style docstrings
+    "sphinx.ext.viewcode",  # Adds links to highlighted source code
     "myst_parser",          # (optional) Markdown support
 ]
 
