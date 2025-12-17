@@ -16,6 +16,21 @@ class recomb_model(eqx.Module):
     Combines helium and hydrogen recombination calculations with
     reionization modeling to compute full ionization history.
 
+    Attributes:
+    -----------
+    integration_spacing : float
+        Step size in log scale factor for integration
+    lna_axis_full : array
+        Full log scale factor grid for recombination evolution
+    z1 : float
+        Final redshift for evolution
+    twog_redshift : float
+        Redshift at which two-photon processes become negligible
+    He4equil_redshift : float
+        Redshift threshold for HeII+III equilibrium phase
+    idx_4He_equil : array
+        Indices for HeII+III equilibrium phase on full grid
+
     Methods:
     --------
     get_history : Compute complete recombination and reionization history (units: dimensionless)

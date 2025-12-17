@@ -4,6 +4,23 @@ import equinox as eqx
 
 
 class array_with_padding(eqx.Module):
+    """
+    Array container with automatic padding management.
+
+    Manages arrays with trailing infinite padding, tracking the last
+    valid element for efficient concatenation operations.
+
+    Attributes:
+    -----------
+    arr : array
+        Full array including padding elements
+    padding_size : int
+        Number of infinite padding elements at end
+    lastnum : int
+        Index of last valid (non-infinite) element
+    lastval : float
+        Value of last valid element
+    """
 
     arr : jnp.array
     padding_size : int
@@ -18,13 +35,32 @@ class array_with_padding(eqx.Module):
         self.padding_size = arr.size-jnp.argmax(jnp.isinf(arr)*1)
 
     def __call__(self):
+        """
+        Return the full array including padding.
+
+        Returns:
+        --------
+        array
+            Complete array with padding elements
+        """
         return self.arr
 
     def concat(self,other_arr):
         """
-        Concatenates self.arr with another array managed in another instnce of array_with_padding.  
-        self.arr will appear first in the concatenation.  Padding size is updated to the padding
-        of both arrays.
+        Concatenate with another padded array.
+
+        Combines two padded arrays by removing padding from the first array
+        and appending the second array, then recomputing padding length.
+
+        Parameters:
+        -----------
+        other_arr : array_with_padding
+            Second array to concatenate after this one
+
+        Returns:
+        --------
+        array_with_padding
+            New padded array containing concatenated data
         """
 
         if not isinstance(other_arr, array_with_padding):

@@ -23,6 +23,25 @@ class hydrogen_model(eqx.Module):
     Saha equilibrium, post-Saha expansion, HYREC-2 EMLA with two-photon processes,
     and late-time EMLA-only evolution.
 
+    Attributes:
+    -----------
+    integration_spacing : float
+        Step size in log scale factor for integration
+    swift : array
+        Tabulated SWIFT correction function for recombination rates
+    concrete_axis_size : array
+        Pre-allocated array for post-Saha phase integration
+    xe_4He : array
+        Helium ionization fraction from previous calculation
+    lna_4He : array
+        Log scale factor grid from helium recombination
+    last_4He_lna : float
+        Final log scale factor from helium phase
+    twog_redshift : float
+        Redshift at which two-photon processes become negligible
+    lna_end : float
+        Final log scale factor for hydrogen evolution
+
     Methods:
     --------
     get_hydrogen_history : Compute full hydrogen recombination history (units: dimensionless)

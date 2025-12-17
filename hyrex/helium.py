@@ -17,6 +17,17 @@ class helium_model(eqx.Module):
     Computes helium ionization fraction evolution through multiple phases:
     HeII+III equilibrium, post-Saha HeII expansion, and full HeII recombination.
 
+    Attributes:
+    -----------
+    integration_spacing : float
+        Step size in log scale factor for integration
+    lna_axis_4Heequil : array
+        Log scale factor grid for HeII+III equilibrium phase
+    concrete_axis_size : array
+        Pre-allocated array for HeII full recombination phase
+    concrete_axis_size_postSahaHe : array
+        Pre-allocated array for post-Saha HeII expansion phase
+
     Methods:
     --------
     get_helium_history : Compute full helium recombination history (units: dimensionless)
