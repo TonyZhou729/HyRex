@@ -21,4 +21,3 @@ Module contents
 .. automodule:: HyRex
    :members:
    :show-inheritance:
-   :undoc-members:

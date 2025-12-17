@@ -686,8 +686,8 @@ class hydrogen_model(eqx.Module):
         Computes the Lyman-n escape rate, rate at which photons redshift past the Lyman-n line 
         without being absorbed. We use the convention that n=2 is Ly-alpha, n=3 is Ly-beta...
 
-        Parameters
-        ----------
+        Parameters:
+        -----------
         n : float
             Requested Lyman transition level, should be greater than 2.
         H : float
@@ -697,8 +697,8 @@ class hydrogen_model(eqx.Module):
         x1s : float
             Fraction of 1s bound hydrogen.
 
-        Returns
-        -------
+        Returns:
+        --------
         RLyn : float
             Rate of escape of Lyman-n level.
         """

@@ -127,8 +127,13 @@ def format_method_summaries(app, what, name, obj, options, lines):
                     i += 1
                     continue
                 
-                # Use simple single-line bullet format to avoid RST field-list warnings
-                out.append(f'* ``{ident}`` : {desc}')
+                # For Methods sections, use bullet with field-like format
+                # For other sections, keep inline format
+                if in_methods_block:
+                    out.append(f'* ``{ident}`` :')
+                    out.append(f'      {desc}')
+                else:
+                    out.append(f'* ``{ident}``  {desc}')
                 i += 1
                 continue
 
@@ -311,3 +316,8 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
+html_theme = 'sphinx_rtd_theme'
+html_css_files = [
+    'custom.css',
+]
+

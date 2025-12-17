@@ -1,0 +1,39 @@
+/* Minimal CSS for visual hierarchy: Class Names > Section Headers > Methods/Attributes */
+
+/* ============================================
+   TOP-LEVEL CLASS NAMES (Most Prominent)
+   ============================================ */
+
+/* Target only top-level class signatures */
+dl.py.class > dt {
+    font-size: 110% !important;
+    color: #2c3e50 !important;
+}
+
+/* ============================================
+   METHODS/ATTRIBUTES (Normal Size)
+   ============================================ */
+
+/* Keep methods and attributes at normal size - don't enlarge them */
+dl.py.method > dt,
+dl.py.function > dt,
+dl.py.attribute > dt {
+    font-size: 100% !important;
+}
+
+/* ============================================
+   SECTION HEADERS (Distinguished with Color)
+   ============================================ */
+
+/* Target bold paragraphs that are section headers (Parameters, Returns, etc.) */
+dd > p > strong:only-child {
+    font-size: 108%;
+    display: inline-block;
+    color: #2980b9;
+}
+
+/* Also target any standalone bold text that serves as headers */
+.py dd > p:first-child > strong:first-child:last-child {
+    font-size: 108%;
+    color: #2980b9;
+}
