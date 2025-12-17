@@ -62,13 +62,13 @@ def alpha_H(Tm):
 
     WARNING: Assumes input Tm to be in eV.
     
-    Parameters
-    ----------
+    Parameters:
+    -----------
     Tm : float
         Matter temperature.
 
-    Returns
-    -------
+    Returns:
+    --------
     alpha_H : float
         Case B recombination coefficient for hydrogen at given matter temperature.        
     """
@@ -88,15 +88,15 @@ def beta_H(TCMB):
 
     Dimensions: s^{-1}
 
-    WARNING: Assumes input TCMB to be in eV. 
+    WARNING: Assumes input TCMB to be in eV.
     
-    Parameters
-    ----------
+    Parameters:
+    -----------
     TCMB : float
         CMB temperature.
 
-    Returns
-    -------
+    Returns:
+    --------
     beta_H : float
         Case B photoionization coefficient for hydrogen at given CMB (radiation) temperature.        
     """
@@ -114,8 +114,8 @@ def peebles_C(z, xHII, H, nH):
     
     Dimensions: None
 
-    Parameters
-    ----------
+    Parameters:
+    -----------
     z : float/jnp.array
         Requested redshift(s).
     xHII : float
@@ -125,8 +125,8 @@ def peebles_C(z, xHII, H, nH):
     nH : float/jnp.array
         Value(s) of hydrogen number density at given redshift(s)
 
-    Returns
-    -------
+    Returns:
+    --------
     C : float/jnp.array
         Peebles C factor.
     """
@@ -149,17 +149,17 @@ def Gamma_compton(xe, TCMB, YHe):
 
     Dimensions: s^{-1}
 
-    Parameters
-    ----------
+    Parameters:
+    -----------
     xe : float
-        Electron fraction.
+        Free electron fraction.
     TCMB : float
         CMB temperature, in eV.
     YHe : float
-        Helium mass fraction. 
-    
-    Returns
-    -------
+        Helium mass fraction.
+
+    Returns:
+    --------
     GammaC : float
         The Compton scattering rate
     """
@@ -176,18 +176,17 @@ def xe_Saha(TCMB, nH):
     Computes the free electron fraction in the Saha equilibrium approximation, valid
     at early times when matter and photons are in Chemical Equilibrium.
 
-    Parameters
-    ----------
+    Parameters:
+    -----------
     TCMB : float
         CMB temperature, in eV
     nH : float
         Current Hydrogen number density, in cm^{-3}
 
-    Returns
-    -------
+    Returns:
+    --------
     xe_saha : float
         Saha equilibrium prediction of free electron fraction.
-
     s : float
         xe_saha^2/(1-xe_saha)
     """
@@ -198,19 +197,17 @@ def xe_Saha(TCMB, nH):
 
 def effective_coefficients(TCMB, Tm, H, nH, x1s):
     """
-    Computes the effective coefficients for
-        Case-B recombination (A2s, A2p)
-        Case-B photoionization (B2s, B2p)
-        Generalized Peebles factors (C2s, C2p)
-    in the effetive four-level-atom strategy outlined by arXiv:1011.3758.
+    Computes the effective coefficients for, Case-B recombination (A2s, A2p), Case-B photoionization (B2s, B2p), 
+    and Generalized Peebles factors (C2s, C2p) in the effetive four-level-atom strategy outlined by
+    arXiv:1011.3758.
 
     Dimensions:
-        A2s, A2p : cm^3 s^{-1}
-        B2s, B2p : s^{-1}
-        C2s, C2p : None
+    A2s, A2p : cm^3 s^{-1}
+    B2s, B2p : s^{-1}
+    C2s, C2p : None
 
-    Parameters
-    ----------
+    Parameters:
+    -----------
     TCMB : float
         Current CMB temperature, in eV.
     Tm : float
@@ -220,14 +217,15 @@ def effective_coefficients(TCMB, Tm, H, nH, x1s):
     nH : float
         Current proton (free+bound) number density, in cm^{-3}.
     x1s : float
-        Fraction of proton in the 1s bound state.    
+        Fraction of proton in the 1s bound state.
 
-    Returns
-    -------
+    Returns:
+    --------
     coefficients : tuple (float, float, float, float, float, float, float, float)
-        A tuple of the six relevant effective coefficients for the four-level-atom. 
+        A tuple of the six relevant effective coefficients for the four-level-atom.
     """
-    """ Step 0: Set up interpolation environment. """
+
+    # """ Step 0: Set up interpolation environment. """
 
     # Determine which columns of alpha_tab to use based on TCMB, Tm
     # Always take the smaller of the two in numerator, such that ratio is < 1.
@@ -246,11 +244,11 @@ def effective_coefficients(TCMB, Tm, H, nH, x1s):
     TCMB_index = jnp.interp(jnp.log(TCMB), TR_axis, jnp.arange(TR_axis.size))
     T_RATIO_index = jnp.interp(T_RATIO_now, T_RATIO_axis, jnp.arange(T_RATIO_axis.size))
     
-    """ Step 1: Obtain recombination coefficients A2s, A2p by interpolating tabulated alpha. """    
+    # """ Step 1: Obtain recombination coefficients A2s, A2p by interpolating tabulated alpha. """    
     A2s = jnp.exp(map_coordinates(jnp.log(A2s_table[:, :, A2s_column]), [TCMB_index, T_RATIO_index], order=1))
     A2p = jnp.exp(map_coordinates(jnp.log(A2p_table[:, :, A2p_column]), [TCMB_index, T_RATIO_index], order=1))
 
-    """ Step 2: Obtain photoionization coefficients B2s, B2p from A2s, A2p via detailed balance. """
+    # """ Step 2: Obtain photoionization coefficients B2s, B2p from A2s, A2p via detailed balance. """
     # See equation (22) of arXiv:1006.1355 for detail. 
     # nl state energy -EI/n^2, where EI is the hydrogen ionization energy, for n=2.
     E2 = -rydberg / 4.
@@ -260,11 +258,11 @@ def effective_coefficients(TCMB, Tm, H, nH, x1s):
     B2s = jnp.exp(E2/TCMB) * q * jnp.exp(map_coordinates(jnp.log(A2s_table[:, :, A2s_column]), [TCMB_index, NTM-1], order=1))
     B2p = (1./3.)*jnp.exp(E2/TCMB) * q * jnp.exp(map_coordinates(jnp.log(A2p_table[:, :, A2p_column]), [TCMB_index, NTM-1], order=1))
 
-    """ Step 3: Obtain 2p->2s transition rate by interpolating tabulated R, and 2s->2p rate via detailed balance. """ 
+    # """ Step 3: Obtain 2p->2s transition rate by interpolating tabulated R, and 2s->2p rate via detailed balance. """ 
     R2p2s = jnp.exp(jnp.interp(jnp.log(TCMB), TR_axis, jnp.log(R_tab)))
     R2s2p = 3.*R2p2s # See equation (21) of arXiv:1006.1355
     
-    """ Step 4: Obtain generalized Peebles C factors for 2s, 2p states """    
+    # """ Step 4: Obtain generalized Peebles C factors for 2s, 2p states """    
     # Rate of escape of lyman-alpha photons, multiplied by the bound proton fraction to regulate possible divergence.
     R_Lya_times_x1s = 8.*jnp.pi*H / (3.*nH*(c/lya_freq)**3) 
     Gamma2s = B2s + R2s2p + R2s1s # Inverse lifetime of 2s state

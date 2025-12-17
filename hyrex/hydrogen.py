@@ -536,7 +536,6 @@ class hydrogen_model(eqx.Module):
 
 
     def dxe_dlna_twophoton(self, xe, TCMB, Tm, H, nH, Delta):
-
         """
         Compute two-photon recombination rate.
 
